@@ -1,0 +1,14 @@
+[patch]
+id = "widescreen-ui-scale-v1"
+name = "Universal Resolution Patch"
+version = "0.1.69"
+author = "Lane, J"
+description = "Adds widescreen resolution support with scaled GUI/HUD."
+
+requires = []
+
+conflicts = ["widescreen", "widescreen-simple", "kotor-widescreen", "kotor-1920x1080-hud-scale", "widescreen-ui-scale"]
+
+[patch.supported_versions]
+kotor1_gog_103 = "9C10E0450A6EECA417E036E3CDE7474FED1F0A92AAB018446D156944DEA91435"
+kotor1_cdcrack_103 = "761F9466F456A83909036BAEBB5C43167D722387BE66E54617BA20A8C49E9886"

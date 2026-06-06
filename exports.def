@@ -1,0 +1,11 @@
+LIBRARY WidescreenUiScale
+EXPORTS
+    scaleGuiExtent
+    postLoadGuiControl
+    postStatusSummaryLayout
+    prepareAreaMapScale
+    prepareAreaMapDimensionsForScreen
+    prepareHudMinimapMapCoordinates
+    prepareHudMinimapRenderCoordinates
+    adjustHudMinimapCenterCoordinates
+    adjustHudMinimapFogGridDimensions

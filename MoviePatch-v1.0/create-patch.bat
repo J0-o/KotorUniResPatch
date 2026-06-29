@@ -256,6 +256,15 @@ if exist "!PATCH_NAME!.kpatch" (
     echo   SUCCESS! Patch created successfully.
     echo ===================================================
     echo.
+    echo   Moving package to parent directory...
+    move /Y "!PATCH_NAME!.kpatch" "..\!PATCH_NAME!.kpatch" >nul
+    if errorlevel 1 (
+        echo   ERROR: Failed to move package to parent directory
+        pause
+        exit /b 1
+    )
+    echo   [OK] Package moved: ..\!PATCH_NAME!.kpatch
+    echo.
 ) else (
     echo   ERROR: Package verification failed
     pause

@@ -1,0 +1,113 @@
+# Inventory item-entry constructor row-height constant.
+#
+# Ghidra/disassembly research:
+# - CSWGuiInGameItemEntry::Initialize at 0x006B4DB0 builds an initial row rect
+#   and calls the entry's virtual SetExtent.
+# - 0x006B4FA5 writes the row rect height immediate 0x38 before that call.
+# - Patching this constructor height lets the normal SetExtent code lay out the
+#   row from a taller extent instead of stretching the icon/text child controls
+#   afterward.
+[[hooks]]
+address = 0x006B4FA5
+type = "simple"
+original_bytes = [0xC7, 0x44, 0x24, 0x1C, 0x38, 0x00, 0x00, 0x00]
+replacement_bytes = [0xC7, 0x44, 0x24, 0x1C, 0x70, 0x00, 0x00, 0x00]
+
+# Inventory/store item-entry visual layout height.
+#
+# CSWGuiInGameItemEntry::SetExtent copies the parent row rect, then loads 0x38
+# into EDI and uses that value for the icon slots, border/background controls,
+# quantity placement, and text positioning. Since the icon controls get both
+# width and height from EDI, changing this to 0x70 keeps them square.
+[[hooks]]
+address = 0x006B527E
+type = "simple"
+original_bytes = [0xBF, 0x38, 0x00, 0x00, 0x00]
+replacement_bytes = [0xBF, 0x70, 0x00, 0x00, 0x00]
+
+# Store inventory/shop item-entry constructor row-height constant.
+#
+# LB_INVITEMS and LB_SHOPITEMS use the sibling item-entry initializer at
+# 0x006B53F0. It shares the visual SetExtent routine patched above, but has its
+# own initial row extent immediate.
+[[hooks]]
+address = 0x006B55DF
+type = "simple"
+original_bytes = [0xC7, 0x44, 0x24, 0x18, 0x38, 0x00, 0x00, 0x00]
+replacement_bytes = [0xC7, 0x44, 0x24, 0x18, 0x70, 0x00, 0x00, 0x00]
+
+# Skill-entry constructor row-height constant.
+#
+# LB_SKILLS preconstructs skill-entry rows and initializes each through vtable
+# slot +0xA8, which resolves to 0x006AC930. Base height is 0x2A.
+[[hooks]]
+address = 0x006ACB1C
+type = "simple"
+original_bytes = [0xC7, 0x44, 0x24, 0x18, 0x2A, 0x00, 0x00, 0x00]
+replacement_bytes = [0xC7, 0x44, 0x24, 0x18, 0x54, 0x00, 0x00, 0x00]
+
+# Skill-entry visual layout height.
+#
+# The skill-entry SetExtent slot at 0x006AB8E0 loads 0x2A into EDI and uses it
+# for the row visuals. Feat rows reuse this helper for their embedded entries.
+[[hooks]]
+address = 0x006AB8EE
+type = "simple"
+original_bytes = [0xBF, 0x2A, 0x00, 0x00, 0x00]
+replacement_bytes = [0xBF, 0x54, 0x00, 0x00, 0x00]
+
+# Feat group row height.
+#
+# LB_FEATS builds feat group rows in 0x006CD7E0. The group SetExtent call uses a
+# 0x28 row height. Test this at 4x for the composite feat rows.
+[[hooks]]
+address = 0x006CD8D5
+type = "simple"
+original_bytes = [0xC7, 0x44, 0x24, 0x24, 0x28, 0x00, 0x00, 0x00]
+replacement_bytes = [0xC7, 0x44, 0x24, 0x24, 0xA0, 0x00, 0x00, 0x00]
+
+# Feat group stored extent normalization.
+#
+# The feat list reuses group row instances across tab clicks. The group SetExtent
+# routine copies the incoming layout rect back into the row object, and the
+# listbox appears to use that stored rect as input on the next refresh. Store the
+# canonical 4x scaled group dimensions instead of the progressively grown incoming
+# dimensions.
+[[hooks]]
+address = 0x006CCFA9
+type = "replace"
+original_bytes = [0x8B, 0x0E, 0x83, 0xC7, 0x04, 0x89, 0x0F, 0x8B, 0x56, 0x04, 0x89, 0x57, 0x04, 0x8B, 0x46, 0x08, 0x89, 0x47, 0x08, 0x8B, 0x4E, 0x0C, 0x89, 0x4F, 0x0C]
+replacement_bytes = [0x8B, 0x0E, 0x83, 0xC7, 0x04, 0x89, 0x0F, 0x8B, 0x56, 0x04, 0x89, 0x57, 0x04, 0xC7, 0x47, 0x08, 0xF2, 0x00, 0x00, 0x00, 0xC7, 0x47, 0x0C, 0xA0, 0x00, 0x00, 0x00]
+
+# Feat icon label clamp flag.
+#
+# With feat group extents normalized above, clearing the label/image natural-size
+# clamp should scale the actual feat icon into the stabilized background instead
+# of growing every time the tab is reopened.
+[[hooks]]
+address = 0x006CCD7E
+type = "simple"
+original_bytes = [0x6A, 0x01]
+replacement_bytes = [0x6A, 0x00]
+
+# Feat arrow label clamp flag.
+#
+# Keep the extra feat arrow labels consistent with the icon labels.
+[[hooks]]
+address = 0x006CCDC1
+type = "simple"
+original_bytes = [0x6A, 0x01]
+replacement_bytes = [0x6A, 0x00]
+
+# Generic composite list row height.
+#
+# Generic list rows, including save/load games, journal quests, and the graphics
+# resolution popup rows, inherit the row setup method at 0x00417970. The setup
+# method copies the incoming row rect and then passes it to the row backgrounds
+# and text label. Double only the copied height before child layout so cached XML
+# templates are not mutated between popup opens.
+[[hooks]]
+address = 0x00417992
+type = "replace"
+original_bytes = [0x8B, 0x40, 0x0C, 0x89, 0x41, 0x0C, 0x8B, 0x4C, 0x24, 0x6C]
+replacement_bytes = [0x8B, 0x40, 0x0C, 0x01, 0xC0, 0x89, 0x41, 0x0C, 0x8B, 0x4C, 0x24, 0x6C]

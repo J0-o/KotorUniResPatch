@@ -1,0 +1,27 @@
+LIBRARY UniversalUiScaler
+EXPORTS
+    scaleMenuPanelTree
+    scalePazaakGameCards
+    scaleQuickOrCustomPanel
+    scaleQuickPanel
+    scaleLevelUpPanel
+    scaleCustomPanel
+    patchClassSelectionLayoutRects
+    patchInitialClassSelectionRects
+    scalePopupDialogPanel
+    scaleStatusSummarySetRect
+    scaleMessageBoxButtonSetRect
+    scaleMessageBoxLabelSetRect
+    scaleMessageBoxAfterFix
+    scaleContainerPanel
+    prepareMenuMapScale
+    prepareMenuMapIconMaterials
+    prepareMenuMapDraw
+    prepareMenuMapMarkerDraw
+    prepareAreaMapDimensionsForScreen
+    scaleHudMinimapExtent
+    prepareHudMinimapScale
+    zoomHudMinimapImageDraw
+    beginHudMinimapGridZoom
+    endHudMinimapGridZoom
+    scaleHudControls

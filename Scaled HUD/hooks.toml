@@ -1,0 +1,44 @@
+# Scale live HUD controls from CSWGuiMainInterface::UpdateActionDescription.
+#
+# This is deliberately separate from the HUD minimap EXTENT hook at 0x00409E4D.
+# The constructor calls this after the base GUI and named child controls are
+# bound. The DLL reapplies stable HUD control rects from cached 800x600
+# templates so module-load resets on the same HUD object are repaired.
+[[hooks]]
+address = 0x00686E20
+type = "detour"
+function = "scaleHudControls"
+original_bytes = [0x6A, 0xFF, 0x68, 0xC0, 0xF3, 0x72, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"
+
+# Action/item mouseover titles are recalculated by UpdateActionDescription after
+# the entry hook runs. Rescale only that volatile title pair after the game's
+# internal layout update has rewritten it back to 800x600 coordinates.
+[[hooks]]
+address = 0x00686F77
+type = "detour"
+function = "scaleHudActionDescription"
+original_bytes = [0x8B, 0x54, 0x24, 0x08, 0x8D, 0x4C, 0x24, 0x0C]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+# Area-transition prompts are constructed outside CSWGuiMainInterface, then
+# stored on the interface manager at +0x94. Center the owner rect after the
+# constructor returns so the module name and icon move as one unit.
+[[hooks]]
+address = 0x00632E38
+type = "detour"
+function = "scaleAreaTransitionPrompt"
+original_bytes = [0x89, 0x83, 0x94, 0x00, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "eax"
+type = "pointer"

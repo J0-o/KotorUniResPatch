@@ -1,0 +1,288 @@
+# Shared dialogue letterbox height.
+#
+# Vanilla derives dialogue letterbox height from screen width:
+#   barHeight = round((screenHeight - round(screenWidth * scale)) * 0.5)
+#
+# That makes ultrawide modes produce very small bars. Use screen height
+# directly instead:
+#   barHeight = round(screenHeight / 6)
+#   1280x720  -> 120px
+#   1920x1080 -> 180px
+#
+# SetTop constructor path.
+[[hooks]]
+address = 0x006A74D2
+type = "replace"
+original_bytes = [
+    0x0F, 0xBF, 0x4F, 0x6C,             # movsx ecx, word ptr [edi+0x6c]
+    0x89, 0x4C, 0x24, 0x0C,             # mov [esp+0x0c], ecx
+    0xDB, 0x44, 0x24, 0x0C,             # fild dword ptr [esp+0x0c]
+    0xD8, 0x0D, 0x88, 0x57, 0x75, 0x00, # fmul dword ptr [0x00755788]
+    0xE8, 0xA3, 0x39, 0x05, 0x00,       # call 0x006FAE8C
+    0x0F, 0xBF, 0x57, 0x6E,             # movsx edx, word ptr [edi+0x6e]
+    0x2B, 0xD0,                         # sub edx, eax
+    0x89, 0x54, 0x24, 0x0C,             # mov [esp+0x0c], edx
+    0xDB, 0x44, 0x24, 0x0C,             # fild dword ptr [esp+0x0c]
+    0xD8, 0x0D, 0xAC, 0xE9, 0x73, 0x00, # fmul dword ptr [0x0073E9AC]
+    0xE8, 0x8A, 0x39, 0x05, 0x00        # call 0x006FAE8C
+]
+replacement_bytes = [
+    0x0F, 0xBF, 0x47, 0x6E,             # movsx eax, word ptr [edi+0x6e]
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x51,                               # push ecx
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59                                # pop ecx
+]
+
+# SetBottom constructor path.
+[[hooks]]
+address = 0x006A7560
+type = "replace"
+original_bytes = [
+    0x0F, 0xBF, 0x4F, 0x6C,             # movsx ecx, word ptr [edi+0x6c]
+    0x0F, 0xBF, 0x5F, 0x6E,             # movsx ebx, word ptr [edi+0x6e]
+    0x89, 0x4C, 0x24, 0x0C,             # mov [esp+0x0c], ecx
+    0xDB, 0x44, 0x24, 0x0C,             # fild dword ptr [esp+0x0c]
+    0xD8, 0x0D, 0x88, 0x57, 0x75, 0x00, # fmul dword ptr [0x00755788]
+    0xE8, 0x11, 0x39, 0x05, 0x00,       # call 0x006FAE8C
+    0x8B, 0xD3,                         # mov edx, ebx
+    0x2B, 0xD0,                         # sub edx, eax
+    0x89, 0x54, 0x24, 0x0C,             # mov [esp+0x0c], edx
+    0xDB, 0x44, 0x24, 0x0C,             # fild dword ptr [esp+0x0c]
+    0xD8, 0x0D, 0xAC, 0xE9, 0x73, 0x00, # fmul dword ptr [0x0073E9AC]
+    0xE8, 0xFA, 0x38, 0x05, 0x00        # call 0x006FAE8C
+]
+replacement_bytes = [
+    0x0F, 0xBF, 0x5F, 0x6E,             # movsx ebx, word ptr [edi+0x6e]
+    0x8B, 0xC3,                         # mov eax, ebx
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x51,                               # push ecx
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59                                # pop ecx
+]
+
+# Nested message/dialog owner root height.
+[[hooks]]
+address = 0x006A7943
+type = "replace"
+original_bytes = [
+    0x0F, 0xBF, 0x55, 0x6C,             # movsx edx, word ptr [ebp+0x6c]
+    0x89, 0x54, 0x24, 0x10,             # mov [esp+0x10], edx
+    0xDB, 0x44, 0x24, 0x10,             # fild dword ptr [esp+0x10]
+    0xD8, 0x0D, 0x88, 0x57, 0x75, 0x00, # fmul dword ptr [0x00755788]
+    0xE8, 0x32, 0x35, 0x05, 0x00,       # call 0x006FAE8C
+    0x0F, 0xBF, 0x4D, 0x6E,             # movsx ecx, word ptr [ebp+0x6e]
+    0x2B, 0xC8,                         # sub ecx, eax
+    0x8B, 0xC1,                         # mov eax, ecx
+    0x99,                               # cdq
+    0x2B, 0xC2,                         # sub eax, edx
+    0xD1, 0xF8,                         # sar eax, 1
+    0x2B, 0xC3,                         # sub eax, ebx
+    0x83, 0xE8, 0x05                    # sub eax, 5
+]
+replacement_bytes = [
+    0x0F, 0xBF, 0x45, 0x6E,             # movsx eax, word ptr [ebp+0x6e]
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x51,                               # push ecx
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59,                               # pop ecx
+    0x2B, 0xC3,                         # sub eax, ebx
+    0x83, 0xE8, 0x05                    # sub eax, 5
+]
+
+# Later message refresh path.
+[[hooks]]
+address = 0x006A7B59
+type = "replace"
+original_bytes = [
+    0x8B, 0x7E, 0x18,                   # mov edi, [esi+0x18]
+    0x0F, 0xBF, 0x57, 0x6C,             # movsx edx, word ptr [edi+0x6c]
+    0x89, 0x54, 0x24, 0x24,             # mov [esp+0x24], edx
+    0xDB, 0x44, 0x24, 0x24,             # fild dword ptr [esp+0x24]
+    0xD8, 0x0D, 0x88, 0x57, 0x75, 0x00, # fmul dword ptr [0x00755788]
+    0xE8, 0x19, 0x33, 0x05, 0x00,       # call 0x006FAE8C
+    0x0F, 0xBF, 0x4F, 0x6E,             # movsx ecx, word ptr [edi+0x6e]
+    0x2B, 0xC8,                         # sub ecx, eax
+    0x8B, 0xC1,                         # mov eax, ecx
+    0x8B, 0x4C, 0x24, 0x08,             # mov ecx, [esp+0x08]
+    0x99,                               # cdq
+    0x2B, 0xC2,                         # sub eax, edx
+    0xD1, 0xF8,                         # sar eax, 1
+    0x2B, 0xC1,                         # sub eax, ecx
+    0x83, 0xC0, 0xFB                    # add eax, -5
+]
+replacement_bytes = [
+    0x8B, 0x7E, 0x18,                   # mov edi, [esi+0x18]
+    0x0F, 0xBF, 0x47, 0x6E,             # movsx eax, word ptr [edi+0x6e]
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x51,                               # push ecx
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59,                               # pop ecx
+    0x2B, 0x44, 0x24, 0x08,             # sub eax, [esp+0x08]
+    0x83, 0xC0, 0xFB                    # add eax, -5
+]
+
+# CSWGuiDialogCinematic::Reset/ShowMessage uses the bottom root top. With a
+# height-based top bar, the bottom root starts at screenHeight - barHeight.
+[[hooks]]
+address = 0x006A7F3D
+type = "replace"
+original_bytes = [
+    0x0F, 0xBF, 0x43, 0x6C,             # movsx eax, word ptr [ebx+0x6c]
+    0x0F, 0xBF, 0x7B, 0x6E,             # movsx edi, word ptr [ebx+0x6e]
+    0x89, 0x44, 0x24, 0x14,             # mov [esp+0x14], eax
+    0xDB, 0x44, 0x24, 0x14,             # fild dword ptr [esp+0x14]
+    0xD8, 0x0D, 0x88, 0x57, 0x75, 0x00, # fmul dword ptr [0x00755788]
+    0xE8, 0x34, 0x2F, 0x05, 0x00,       # call 0x006FAE8C
+    0x8B, 0xCF,                         # mov ecx, edi
+    0x2B, 0xC8,                         # sub ecx, eax
+    0x8B, 0xC1,                         # mov eax, ecx
+    0x99,                               # cdq
+    0x2B, 0xC2,                         # sub eax, edx
+    0x8B, 0x54, 0x24, 0x10,             # mov edx, [esp+0x10]
+    0xD1, 0xF8,                         # sar eax, 1
+    0x2B, 0xF8,                         # sub edi, eax
+    0x89, 0x7C, 0x24, 0x28              # mov [esp+0x28], edi
+]
+replacement_bytes = [
+    0x0F, 0xBF, 0x7B, 0x6E,             # movsx edi, word ptr [ebx+0x6e]
+    0x8B, 0xC7,                         # mov eax, edi
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x51,                               # push ecx
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59,                               # pop ecx
+    0x2B, 0xF8,                         # sub edi, eax
+    0x8B, 0x54, 0x24, 0x10,             # mov edx, [esp+0x10]
+    0x89, 0x7C, 0x24, 0x28              # mov [esp+0x28], edi
+]
+
+# Dialogue owner constructor bottom root placement.
+[[hooks]]
+address = 0x006A8C4C
+type = "replace"
+original_bytes = [
+    0x0F, 0xBF, 0x47, 0x6C,             # movsx eax, word ptr [edi+0x6c]
+    0x89, 0x44, 0x24, 0x10,             # mov [esp+0x10], eax
+    0xDB, 0x44, 0x24, 0x10,             # fild dword ptr [esp+0x10]
+    0xD8, 0x0D, 0xE4, 0x5A, 0x75, 0x00, # fmul dword ptr [0x00755AE4]
+    0xE8, 0x29, 0x22, 0x05, 0x00,       # call 0x006FAE8C
+    0x0F, 0xBF, 0x4F, 0x6E,             # movsx ecx, word ptr [edi+0x6e]
+    0x2B, 0xC8,                         # sub ecx, eax
+    0x8B, 0xC1,                         # mov eax, ecx
+    0x99,                               # cdq
+    0x2B, 0xC2,                         # sub eax, edx
+    0x8B, 0x54, 0x24, 0x64,             # mov edx, [esp+0x64]
+    0xD1, 0xF8,                         # sar eax, 1
+    0x89, 0x44, 0x24, 0x28              # mov [esp+0x28], eax
+]
+replacement_bytes = [
+    0x0F, 0xBF, 0x47, 0x6E,             # movsx eax, word ptr [edi+0x6e]
+    0x50,                               # push eax
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59,                               # pop ecx
+    0x2B, 0xC8,                         # sub ecx, eax
+    0x89, 0x4C, 0x24, 0x28,             # mov [esp+0x28], ecx
+    0x8B, 0x54, 0x24, 0x64              # mov edx, [esp+0x64]
+]
+
+# CSWGuiDialog::SetRect propagates the root dialogue rect into LB_REPLIES and
+# LBL_MESSAGE. With the scaled letterbox height above, LB_REPLIES can keep the
+# old template height even after the bottom letterbox grows. Right before the
+# LB_REPLIES SetRect call:
+#   rootHeight = round(screenHeight / 6)
+#   repliesHeight = rootHeight - repliesLocalTop
+#
+# Store repliesHeight on the LB_REPLIES template and stack rect so the listbox
+# viewport, scrollbar, and clickable rows use the same height.
+[[hooks]]
+address = 0x006A7CD0
+type = "replace"
+original_bytes = [
+    0x8B, 0x96, 0xC4, 0x19, 0x00, 0x00, # mov edx, [esi+0x19c4]
+    0x89, 0x44, 0x24, 0x10,             # mov [esp+0x10], eax
+    0x89, 0x4C, 0x24, 0x0C,             # mov [esp+0x0c], ecx
+    0x8D, 0x8E, 0xC4, 0x19, 0x00, 0x00, # lea ecx, [esi+0x19c4]
+    0x8D, 0x44, 0x24, 0x04,             # lea eax, [esp+0x04]
+    0x50,                               # push eax
+    0xFF, 0x52, 0x04                    # call dword ptr [edx+0x04]
+]
+replacement_bytes = [
+    0x8B, 0x46, 0x18,                   # mov eax, [esi+0x18]
+    0x0F, 0xBF, 0x40, 0x6E,             # movsx eax, word ptr [eax+0x6e]
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x51,                               # push ecx
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59,                               # pop ecx
+    0x2B, 0x44, 0x24, 0x08,             # sub eax, [esp+0x08]
+    0x89, 0x86, 0xD4, 0x19, 0x00, 0x00, # mov [esi+0x19d4], eax
+    0x8B, 0x96, 0xC4, 0x19, 0x00, 0x00, # original: mov edx, [esi+0x19c4]
+    0x89, 0x44, 0x24, 0x10,             # original target height: mov [esp+0x10], eax
+    0x89, 0x4C, 0x24, 0x0C,             # original: mov [esp+0x0c], ecx
+    0x8D, 0x8E, 0xC4, 0x19, 0x00, 0x00, # original: lea ecx, [esi+0x19c4]
+    0x8D, 0x44, 0x24, 0x04,             # original: lea eax, [esp+0x04]
+    0x50,                               # original: push eax
+    0xFF, 0x52, 0x04                    # original: call dword ptr [edx+0x04]
+]
+
+# CSWGuiDialogCinematic::SetReplies has just delegated to the base
+# CSWGuiDialog::SetReplies path. Store rootHeight on the cinematic dialog root
+# here, after the base path has rebuilt the reply controls. This preserves the
+# scaled listbox input/scrollbar area without touching CSWGuiDialogComputer.
+# Keeping this in the cinematic wrapper avoids changing CSWGuiDialogComputer,
+# which also delegates through CSWGuiDialog::SetReplies.
+[[hooks]]
+address = 0x006A8E1D
+type = "replace"
+original_bytes = [
+    0xF6, 0x86, 0x08, 0x1A, 0x00, 0x00, 0x02, # test byte ptr [esi+0x1a08], 2
+    0x74, 0x4F                                # je 0x006A8E75
+]
+replacement_bytes = [
+    0x85, 0xDB,                         # test ebx, ebx
+    0x74, 0x17,                         # je original
+    0x8B, 0x46, 0x18,                   # mov eax, [esi+0x18]
+    0x0F, 0xBF, 0x40, 0x6E,             # movsx eax, word ptr [eax+0x6e]
+    0x83, 0xC0, 0x03,                   # add eax, 3
+    0x51,                               # push ecx
+    0x99,                               # cdq
+    0xB9, 0x06, 0x00, 0x00, 0x00,       # mov ecx, 6
+    0xF7, 0xF9,                         # idiv ecx
+    0x59,                               # pop ecx
+    0x89, 0x46, 0x10,                   # mov [esi+0x10], eax
+    0xF6, 0x86, 0x08, 0x1A, 0x00, 0x00, 0x02, # original: test byte ptr [esi+0x1a08], 2
+    0x75, 0x06,                         # jne continue with original fallthrough
+    0x68, 0x75, 0x8E, 0x6A, 0x00,       # push 0x006A8E75
+    0xC3                                # ret
+]
+
+# CSWGuiDialogCinematic::Reset/ShowMessage layout reads the previous dialog
+# root height before resetting the message root to 100px, then subtracts
+# oldHeight - 100 from LBL_MESSAGE height. After a player choice, the active
+# reply path has intentionally enlarged +0x10 for listbox input, but the next
+# NPC subtitle is not a prior subtitle expansion. Force this old-height baseline
+# to 100 so subtitle text measurement starts from the normal message template.
+[[hooks]]
+address = 0x006A7F71
+type = "simple"
+original_bytes = [
+    0x8B, 0x7E, 0x10                    # mov edi, [esi+0x10]
+]
+replacement_bytes = [
+    0x6A, 0x64,                         # push 0x64
+    0x5F                                # pop edi
+]

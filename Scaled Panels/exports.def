@@ -1,0 +1,6 @@
+LIBRARY ScaledPanels
+EXPORTS
+    scaleQuickOrCustomPanel
+    scaleQuickPanel
+    scaleLevelUpPanel
+    scaleCustomPanel

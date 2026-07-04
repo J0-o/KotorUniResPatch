@@ -1,0 +1,31 @@
+# Scale menu panels after their layout and named child controls are loaded.
+#
+# CSWGuiPanel::StopLoadFromLayout is called by most menu constructors after
+# StartLoadFromLayout and all FUN_0040B930 named-control binds. This is higher
+# and more direct than hooking CSWGuiExtent::Load or every CSWGuiControl::Load,
+# and it leaves the HUD minimap EXTENT hook at 0x00409E4D alone.
+[[hooks]]
+address = 0x0040B8F0
+type = "detour"
+function = "scaleMenuPanelTree"
+original_bytes = [0x56, 0x8B, 0xF1, 0xF6, 0x46, 0x44, 0x02]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"
+
+# Pazaak hand cards are CSWGuiPazaakCard composites that the game refreshes
+# after the generic panel layout pass. Reapply exact scaled hand-card extents
+# before the Pazaak game panel draws so active/late-updated cards do not fall
+# back to vanilla 800x600 size.
+[[hooks]]
+address = 0x00680710
+type = "detour"
+function = "scalePazaakGameCards"
+original_bytes = [0x56, 0x8B, 0xF1, 0xD9, 0x86, 0xD8, 0x86, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"

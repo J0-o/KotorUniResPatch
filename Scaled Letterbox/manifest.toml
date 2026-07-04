@@ -1,0 +1,13 @@
+[patch]
+id = "letterbox-patch-v1"
+name = "Scaled Letterbox"
+version = "1.0.8"
+author = "J"
+description = "Fixes dialogue letterbox size to be consistent across resolutions."
+
+requires = []
+
+conflicts = ["letterbox-height-2x-v1", "dialog-choice-box-height-fix-v1", "dialogue-letterbox-choice-fix-v1"]
+
+[patch.supported_versions]
+kotor1_gog_103 = "9C10E0450A6EECA417E036E3CDE7474FED1F0A92AAB018446D156944DEA91435"

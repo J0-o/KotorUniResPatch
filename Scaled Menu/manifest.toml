@@ -1,0 +1,13 @@
+[patch]
+id = "menu-scale-v1"
+name = "Scaled Menu"
+version = "1.0.1"
+author = "J"
+description = "Scales and centers main menu"
+
+requires = ["widescreen-resolution-unlock-v1"]
+
+conflicts = ["widescreen-ui-scale-v1", "widescreen-ui-scale"]
+
+[patch.supported_versions]
+kotor1_gog_103 = "9C10E0450A6EECA417E036E3CDE7474FED1F0A92AAB018446D156944DEA91435"

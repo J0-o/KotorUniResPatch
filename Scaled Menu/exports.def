@@ -1,0 +1,4 @@
+LIBRARY MenuScale
+EXPORTS
+    scaleMenuPanelTree
+    scalePazaakGameCards

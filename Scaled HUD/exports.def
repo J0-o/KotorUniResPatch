@@ -1,0 +1,5 @@
+LIBRARY HudScale
+EXPORTS
+    scaleHudControls
+    scaleHudActionDescription
+    scaleAreaTransitionPrompt

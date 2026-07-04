@@ -1,0 +1,7 @@
+LIBRARY PopupDialogScaleTest
+EXPORTS
+    scalePopupDialogPanel
+    scaleStatusSummarySetRect
+    scaleMessageBoxButtonSetRect
+    scaleMessageBoxLabelSetRect
+    scaleMessageBoxAfterFix

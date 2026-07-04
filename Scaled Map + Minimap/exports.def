@@ -1,0 +1,12 @@
+LIBRARY ScaledMapMinimap
+EXPORTS
+    prepareMenuMapScale
+    prepareMenuMapIconMaterials
+    prepareMenuMapDraw
+    prepareMenuMapMarkerDraw
+    prepareAreaMapDimensionsForScreen
+    scaleHudMinimapExtent
+    prepareHudMinimapScale
+    zoomHudMinimapImageDraw
+    beginHudMinimapGridZoom
+    endHudMinimapGridZoom

@@ -1,0 +1,12 @@
+# Scale the container popup after container.gui has loaded and named children
+# are bound, matching the small-root PNL popup post-load scaling path.
+[[hooks]]
+address = 0x006B70CD
+type = "detour"
+function = "scaleContainerPanel"
+original_bytes = [0x8B, 0x46, 0x6C, 0x83, 0xE0, 0xF9, 0x83, 0xC8, 0x01]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"

@@ -1,0 +1,4 @@
+LIBRARY ClassSelectionLayoutConstantsTest
+EXPORTS
+    patchInitialClassSelectionRects
+    patchClassSelectionLayoutRects

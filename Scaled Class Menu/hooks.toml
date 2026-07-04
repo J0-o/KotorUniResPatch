@@ -1,0 +1,86 @@
+# FUN_006DC030 computes class-selection slot rects every frame, then calls
+# SetRect for the base slot object and wrapper object. Patch the stack rects
+# immediately before each SetRect pair, so the game's setters propagate the
+# desired geometry to child/mouseover/model rects.
+
+# Constructor end, after StopLoadFromLayout and FUN_0040A630. This fixes the
+# first visible placement before the runtime layout path runs on hover/input.
+[[hooks]]
+address = 0x006DCDCE
+type = "detour"
+function = "patchInitialClassSelectionRects"
+original_bytes = [0x8B, 0x4D, 0x0C, 0x51, 0x8D, 0x8B, 0x58, 0x15, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ebx"
+type = "pointer"
+
+[[hooks]]
+address = 0x006DC1D2
+type = "detour"
+function = "patchClassSelectionLayoutRects"
+original_bytes = [0x8B, 0x11, 0x50, 0xFF, 0x52, 0x04]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esp+20"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+44"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+28"
+type = "pointer"
+
+[[hooks]]
+address = 0x006DC2EA
+type = "detour"
+function = "patchClassSelectionLayoutRects"
+original_bytes = [0x8B, 0x11, 0x50, 0xFF, 0x52, 0x04]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esp+20"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+44"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+28"
+type = "pointer"
+
+[[hooks]]
+address = 0x006DC2B2
+type = "detour"
+function = "patchClassSelectionLayoutRects"
+original_bytes = [0x8B, 0x11, 0x50, 0xFF, 0x52, 0x04]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esp+20"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+44"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+28"
+type = "pointer"

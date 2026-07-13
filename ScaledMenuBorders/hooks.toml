@@ -1,0 +1,14 @@
+# CSWGui composite draw path for confirmed menu/loading background objects.
+# The embedded background child lives at parent + 0x5C; its left coordinate is
+# child + 0x04 and its width is child + 0x0C. Hooking draw keeps this dynamic
+# and avoids unrelated LBL_MENUBG/control rects.
+[[hooks]]
+address = 0x00417750
+type = "detour"
+function = "center800x600backDynamic"
+original_bytes = [0x56, 0x57, 0x8B, 0x7C, 0x24, 0x0C, 0x8B, 0xF1]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"

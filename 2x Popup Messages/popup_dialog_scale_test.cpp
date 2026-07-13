@@ -13,19 +13,23 @@ constexpr DWORD DebugVtable = 0x00756B30;
 constexpr DWORD DebugAltVtable = 0x00757A78;
 constexpr DWORD ResolutionVtable = 0x00758348;
 constexpr DWORD SkillInfoTooltipVtable = 0x00757940;
+constexpr DWORD StatusSummaryVtable = 0x0074FF68;
 
-constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
 constexpr int BaseWidth = 800;
-constexpr int BaseHeight = 600;
-
-constexpr DWORD StatusSummaryIconReturn = 0x0062615C;
-constexpr DWORD StatusSummaryTextReturn = 0x0062619A;
-constexpr DWORD StatusSummaryTextAdjustReturn = 0x006261F4;
+constexpr int TestScale = 2;
+constexpr DWORD StatusButtonOffset = 0x1980;
+constexpr int StatusButtonWidth = 200;
+constexpr int StatusButtonHeight = 44;
+constexpr int StatusButtonBottomMargin = 20;
 constexpr DWORD StatusSummaryRootReturn = 0x006262B7;
 constexpr DWORD StatusSummaryLowerReturn = 0x00626301;
-constexpr DWORD MessageBoxFixMessageLabelStart = 0x006253A0;
-constexpr DWORD MessageBoxFixMessageLabelEnd = 0x006258F0;
+constexpr DWORD MessageBoxOkButtonFinalReturn = 0x0062588D;
+constexpr DWORD MessageBoxCancelButtonFinalReturn = 0x006258DB;
+constexpr DWORD MessageBoxFrameIconFinalReturn = 0x00625835;
+constexpr DWORD StatusSummaryIconReturn = 0x0062615C;
+constexpr int StatusSummaryFirstRowTop = 10;
+constexpr int StatusSummaryNativeRowSpacing = 0x25;
+constexpr int StatusSummaryExtraIconSpacing = 18;
 constexpr DWORD MessageBoxFrameOffset = 0x74;
 constexpr DWORD MessageBoxFrameIconOffset = 0x1B4;
 constexpr DWORD MessageBoxOkButtonOffset = 0x2F4;
@@ -48,38 +52,9 @@ bool safeReadDword(const void* address, DWORD& value) {
     }
 }
 
-bool safeReadInt(const void* address, int& value) {
-    __try {
-        value = *reinterpret_cast<const int*>(address);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        value = 0;
-        return false;
-    }
-}
-
 bool hasUsefulRect(const Rect& rect) {
     return rect.width > 0 && rect.height > 0 &&
         rect.width < 8192 && rect.height < 8192;
-}
-
-int screenWidth() {
-    int width = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenWidthAddress), width) || width <= 0) {
-        return BaseWidth;
-    }
-
-    return width;
-}
-
-int screenHeight() {
-    int height = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenHeightAddress), height) || height <= 0) {
-        return BaseHeight;
-    }
-
-    return height;
 }
 
 int scaleValue(int value, int target, int source) {
@@ -91,40 +66,33 @@ int scaleValue(int value, int target, int source) {
 }
 
 int menuWidth() {
-    int width = scaleValue(BaseWidth, screenHeight(), BaseHeight);
-    if (width > screenWidth()) {
-        width = screenWidth();
-    }
-
-    return width;
+    return BaseWidth * TestScale;
 }
 
 Rect scaledRect(const Rect& rect) {
     const int width = menuWidth();
     return {
         scaleValue(rect.left, width, BaseWidth),
-        scaleValue(rect.top, screenHeight(), BaseHeight),
+        rect.top * TestScale,
         scaleValue(rect.width, width, BaseWidth),
-        scaleValue(rect.height, screenHeight(), BaseHeight),
+        rect.height * TestScale,
     };
 }
 
 Rect scaledHeightRect(const Rect& rect) {
-    const int height = screenHeight();
     return {
-        scaleValue(rect.left, height, BaseHeight),
-        scaleValue(rect.top, height, BaseHeight),
-        scaleValue(rect.width, height, BaseHeight),
-        scaleValue(rect.height, height, BaseHeight),
+        rect.left * TestScale,
+        rect.top * TestScale,
+        rect.width * TestScale,
+        rect.height * TestScale,
     };
 }
 
 Rect scaledCenteredHeightRect(const Rect& rect) {
-    const int height = screenHeight();
     const int centerX = rect.left + (rect.width / 2);
     const int centerY = rect.top + (rect.height / 2);
-    const int scaledWidth = scaleValue(rect.width, height, BaseHeight);
-    const int scaledHeight = scaleValue(rect.height, height, BaseHeight);
+    const int scaledWidth = rect.width * TestScale;
+    const int scaledHeight = rect.height * TestScale;
 
     return {
         centerX - (scaledWidth / 2),
@@ -132,6 +100,51 @@ Rect scaledCenteredHeightRect(const Rect& rect) {
         scaledWidth,
         scaledHeight,
     };
+}
+
+Rect doubledHeightCenteredRect(const Rect& rect) {
+    const int centerY = rect.top + (rect.height / 2);
+    const int scaledHeight = rect.height * TestScale;
+    return {
+        rect.left,
+        centerY - (scaledHeight / 2),
+        rect.width,
+        scaledHeight,
+    };
+}
+
+Rect scaledCenteredWidthRect(const Rect& rect) {
+    const int centerX = rect.left + (rect.width / 2);
+    const int scaledWidth = rect.width * TestScale;
+    return {
+        centerX - (scaledWidth / 2),
+        rect.top * TestScale,
+        scaledWidth,
+        rect.height * TestScale,
+    };
+}
+
+void scaleStatusButton(char* control, Rect& rect) {
+    if (!control) {
+        return;
+    }
+
+    char* owner = control - StatusButtonOffset;
+    DWORD vtable = 0;
+    if (!safeReadDword(owner, vtable) || vtable != StatusSummaryVtable) {
+        return;
+    }
+
+    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
+    if (!hasUsefulRect(*root)) {
+        return;
+    }
+
+    const int centerX = rect.left + (rect.width / 2);
+    rect.left = centerX - (StatusButtonWidth / 2);
+    rect.top = root->height - StatusButtonHeight - StatusButtonBottomMargin;
+    rect.width = StatusButtonWidth;
+    rect.height = StatusButtonHeight;
 }
 
 bool isExpectedPopupVtable(DWORD vtable) {
@@ -155,8 +168,12 @@ bool isSkillInfoTooltipVtable(DWORD vtable) {
 }
 
 bool isMessageBoxButtonSetExtentReturn(DWORD returnAddress) {
-    return returnAddress >= MessageBoxFixMessageLabelStart &&
-        returnAddress < MessageBoxFixMessageLabelEnd;
+    return returnAddress == MessageBoxOkButtonFinalReturn ||
+        returnAddress == MessageBoxCancelButtonFinalReturn;
+}
+
+bool isMessageBoxLabelSetRectReturn(DWORD returnAddress) {
+    return returnAddress == MessageBoxFrameIconFinalReturn;
 }
 
 char* messageBoxOwnerFromButton(char* control) {
@@ -228,9 +245,9 @@ void scaleMessageBoxLabelRect(char* control, Rect& rect) {
     }
 
     if (labelOffset == MessageBoxFrameOffset) {
-        rect.left = scaleValue(rect.left, screenHeight(), BaseHeight);
-        rect.top = scaleValue(rect.top, screenHeight(), BaseHeight);
-        rect.height = scaleValue(rect.height, screenHeight(), BaseHeight);
+        rect.left *= TestScale;
+        rect.top *= TestScale;
+        rect.height *= TestScale;
         if (rect.width > root->width) {
             rect.width = root->width;
         }
@@ -238,11 +255,11 @@ void scaleMessageBoxLabelRect(char* control, Rect& rect) {
     }
 
     const int centerX = rect.left + (rect.width / 2);
-    const int scaledWidth = scaleValue(rect.width, screenHeight(), BaseHeight);
+    const int scaledWidth = rect.width * TestScale;
     rect.left = centerX - (scaledWidth / 2);
-    rect.top = scaleValue(rect.top, screenHeight(), BaseHeight);
+    rect.top *= TestScale;
     rect.width = scaledWidth;
-    rect.height = scaleValue(rect.height, screenHeight(), BaseHeight);
+    rect.height *= TestScale;
 }
 
 void scaleMessageBoxFrameControl(char* owner, DWORD offset) {
@@ -329,18 +346,14 @@ void scaleSkillInfoTooltipControls(char* owner) {
 }
 
 bool isStatusSummarySetRectReturn(DWORD returnAddress) {
-    return returnAddress == StatusSummaryIconReturn ||
-        returnAddress == StatusSummaryTextReturn ||
-        returnAddress == StatusSummaryTextAdjustReturn ||
-        returnAddress == StatusSummaryRootReturn ||
-        returnAddress == StatusSummaryLowerReturn;
+    return returnAddress == StatusSummaryRootReturn;
 }
 
 }
 
 void scalePopupDialogPanel(void* ownerPtr) {
     char* owner = static_cast<char*>(ownerPtr);
-    if (!owner || (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+    if (!owner) {
         return;
     }
 
@@ -367,7 +380,7 @@ void scalePopupDialogPanel(void* ownerPtr) {
 void scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot) {
     UNREFERENCED_PARAMETER(control);
 
-    if (!returnAddressSlot || !rectPointerSlot || (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+    if (!returnAddressSlot || !rectPointerSlot) {
         return;
     }
 
@@ -385,12 +398,13 @@ void scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* r
         return;
     }
 
+    // FUN_00625C60 already derives the root width from measured text. Preserve
+    // that width, but double its height to contain the scaled rows and button.
     if (returnAddress == StatusSummaryRootReturn) {
-        *rect = scaledCenteredHeightRect(*rect);
+        *rect = doubledHeightCenteredRect(*rect);
+        return;
     }
-    else {
-        *rect = scaledHeightRect(*rect);
-    }
+
 }
 
 void scaleMessageBoxButtonSetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot) {
@@ -405,9 +419,14 @@ void scaleMessageBoxButtonSetRect(void* control, DWORD* returnAddressSlot, DWORD
     }
 
     Rect* rect = reinterpret_cast<Rect*>(rectAddress);
+    if (returnAddress == StatusSummaryLowerReturn &&
+        hasUsefulRect(*rect)) {
+        scaleStatusButton(static_cast<char*>(control), *rect);
+        return;
+    }
+
     if (isMessageBoxButtonSetExtentReturn(returnAddress) &&
-        hasUsefulRect(*rect) &&
-        (screenWidth() != BaseWidth || screenHeight() != BaseHeight)) {
+        hasUsefulRect(*rect)) {
         const int centerX = rect->left + (rect->width / 2);
         rect->width = scaledMessageBoxButtonWidth(static_cast<char*>(control), *rect);
         rect->left = centerX - (rect->width / 2);
@@ -426,16 +445,26 @@ void scaleMessageBoxLabelSetRect(void* control, DWORD* returnAddressSlot, DWORD*
     }
 
     Rect* rect = reinterpret_cast<Rect*>(rectAddress);
-    if (isMessageBoxButtonSetExtentReturn(returnAddress) &&
-        hasUsefulRect(*rect) &&
-        (screenWidth() != BaseWidth || screenHeight() != BaseHeight)) {
+    if (returnAddress == StatusSummaryIconReturn &&
+        hasUsefulRect(*rect)) {
+        // The game assigns active rows at Y=10, 47, 84, ... regardless of
+        // message type. Keep the first row anchored and add a small amount of
+        // spacing for each following visible row.
+        const int row = (rect->top - StatusSummaryFirstRowTop) /
+            StatusSummaryNativeRowSpacing;
+        rect->top += row * StatusSummaryExtraIconSpacing;
+        return;
+    }
+
+    if (isMessageBoxLabelSetRectReturn(returnAddress) &&
+        hasUsefulRect(*rect)) {
         scaleMessageBoxLabelRect(static_cast<char*>(control), *rect);
     }
 }
 
 void scaleMessageBoxAfterFix(void* ownerPtr) {
     char* owner = static_cast<char*>(ownerPtr);
-    if (!owner || (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+    if (!owner) {
         return;
     }
 
@@ -445,7 +474,6 @@ void scaleMessageBoxAfterFix(void* ownerPtr) {
     }
 
     scaleMessageBoxFrameControl(owner, MessageBoxFrameOffset);
-    scaleMessageBoxFrameControl(owner, MessageBoxFrameIconOffset);
 }
 
 }

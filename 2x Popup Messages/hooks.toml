@@ -1,9 +1,8 @@
 # Scale selected popup dialog panels after StopLoadFromLayout has populated the
 # root and named children, but before these constructors cache root dimensions.
 
-# XP/item/status quick-message popups are laid out in FUN_00625C60 and then
-# applied through CSWGuiPanel::SetRect / CSWGuiControl::SetRect at 0x0040A5A0.
-# Filter by return address so this hot SetRect hook only edits that popup path.
+# XP/item/status quick-message root panels are applied through SetRect at
+# 0x0040A5A0. Persistent icon/text labels are left to the game.
 [[hooks]]
 address = 0x0040A5A0
 type = "detour"
@@ -46,9 +45,8 @@ type = "pointer"
 source = "esp+4"
 type = "pointer"
 
-# The same recalculation also rewrites the confirm frame label controls through
-# CSWGuiLabel::SetRect. Filter by the same FixMessageLabel return-address range
-# and by confirm-owner offsets in C++.
+# Handles the final confirm-frame icon commit and applies the status-summary
+# icon's one-row vertical offset through CSWGuiLabel::SetRect.
 [[hooks]]
 address = 0x00417780
 type = "detour"
@@ -116,11 +114,13 @@ exclude_from_restore = []
 source = "esi"
 type = "pointer"
 
+# Run after display-mode enumeration has populated the resolution list. ESI
+# remains the dialog owner here; scaling at 0x006E08A3 was too early.
 [[hooks]]
-address = 0x006E08A3
+address = 0x006E0BFD
 type = "detour"
 function = "scalePopupDialogPanel"
-original_bytes = [0x68, 0x90, 0xF6, 0x6D, 0x00, 0x56, 0x6A, 0x27, 0x8B, 0xCF]
+original_bytes = [0x8D, 0x4C, 0x24, 0x34, 0x89, 0x9E, 0x0C, 0x08, 0x00, 0x00]
 exclude_from_restore = []
 
 [[hooks.parameters]]

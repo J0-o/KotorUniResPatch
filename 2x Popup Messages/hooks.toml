@@ -142,17 +142,6 @@ source = "esi"
 type = "pointer"
 
 [[hooks]]
-address = 0x006C7E82
-type = "detour"
-function = "scalePopupDialogPanel"
-original_bytes = [0x8B, 0x56, 0x44, 0x8B, 0x46, 0x08]
-exclude_from_restore = []
-
-[[hooks.parameters]]
-source = "esi"
-type = "pointer"
-
-[[hooks]]
 address = 0x006BDD72
 type = "detour"
 function = "scalePopupDialogPanel"

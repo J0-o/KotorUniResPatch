@@ -1,7 +1,7 @@
 [patch]
 id = "hud-scale-v1"
 name = "Scaled HUD"
-version = "1.0.29"
+version = "1.0.36"
 author = "J"
 description = "Scales and repositions HUD elements"
 

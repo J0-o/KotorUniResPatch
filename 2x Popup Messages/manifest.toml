@@ -1,7 +1,7 @@
 [patch]
 id = "2x-popup-messages-v1"
 name = "2x Popup Messages"
-version = "0.1.0"
+version = "0.1.1"
 author = "J"
 description = "Scales popup messages. Still very early testing."
 

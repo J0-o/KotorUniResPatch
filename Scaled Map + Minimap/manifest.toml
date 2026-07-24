@@ -1,7 +1,7 @@
 [patch]
 id = "area-map-hud-minimap-2x-scale-v1"
 name = "Scaled Map + Minimap"
-version = "1.0.0"
+version = "1.0.3"
 author = "J"
 description = "Scales the full-screen area/menu map and HUD minimap together by a screen-height-derived integer scale so shared map coordinates remain consistent."
 

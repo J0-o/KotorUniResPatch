@@ -11,6 +11,11 @@ struct Rect {
     int height;
 };
 
+struct OffsetRect {
+    DWORD offset;
+    Rect rect;
+};
+
 constexpr int BaseWidth = 800;
 constexpr int BaseHeight = 600;
 constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
@@ -67,6 +72,26 @@ CachedRect g_cachedRects[MaxCachedRects] = {};
 constexpr DWORD CharacterControlOffsets[] = {
     0x28, 0x168, 0x2A8, 0x3E8, 0x528,
     0x668, 0x7A8, 0x8F8, 0xA48, 0xB88, 0xCC8
+};
+
+constexpr DWORD StatusSummaryBase = 0xA460;
+constexpr DWORD StatusSummaryStride = 0x14C;
+constexpr OffsetRect StatusSummaryRects[] = {
+    { 0 * StatusSummaryStride, { 130, 4,  32, 32 } }, // journal
+    { 1 * StatusSummaryStride, { 163, 4,  32, 32 } }, // credits
+    { 2 * StatusSummaryStride, { 130, 39, 32, 32 } }, // plot XP
+    { 3 * StatusSummaryStride, { 163, 39, 32, 32 } }, // stealth XP
+    { 4 * StatusSummaryStride, { 130, 39, 32, 32 } }, // dark-side shift
+    { 5 * StatusSummaryStride, { 163, 39, 32, 32 } }, // light-side shift
+    { 7 * StatusSummaryStride, { 130, 74, 32, 32 } }, // item received
+    { 8 * StatusSummaryStride, { 163, 74, 32, 32 } }  // item lost
+};
+
+constexpr Rect AreaTransitionOwnerRect = { 150, 100, 500, 103 };
+constexpr OffsetRect AreaTransitionControlRects[] = {
+    { 0x64,  { 0,   0,  500, 40 } }, // text background
+    { 0x1A4, { 218, 39, 63,  63 } }, // icon
+    { 0x2E4, { 33,  11, 435, 25 } }  // description
 };
 
 bool writeMemory(void* address, const void* replacement, size_t size) {
@@ -420,10 +445,18 @@ void scaleCharacter(char* base, DWORD offset, int scale) {
 }
 
 void scaleStatusSummaries(char* base, int scale) {
-    constexpr DWORD StatusBase = 0xA460;
-    constexpr DWORD StatusStride = 0x14C;
-    for (int i = 0; i < 9; ++i) {
-        scaleControl(base, StatusBase + (StatusStride * i), scale);
+    if (!base) {
+        return;
+    }
+
+    for (const OffsetRect& summary : StatusSummaryRects) {
+        const Rect scaled = {
+            summary.rect.left * scale,
+            summary.rect.top * scale,
+            summary.rect.width * scale,
+            summary.rect.height * scale
+        };
+        callControlSetRect(base + StatusSummaryBase + summary.offset, scaled);
     }
 }
 
@@ -432,36 +465,39 @@ void scaleRootPanel(char* base) {
     callControlSetRect(base, root);
 }
 
-void scaleCenteredOwnerRect(char* owner, int scale) {
+void scaleAreaTransitionOwner(char* owner, int scale) {
     if (!owner) {
         return;
     }
 
-    Rect original = {};
-    if (!safeReadRect(owner + 0x04, original) || !hasUsefulRect(original)) {
-        return;
+    for (const OffsetRect& control : AreaTransitionControlRects) {
+        const Rect scaled = {
+            control.rect.left * scale,
+            control.rect.top * scale,
+            control.rect.width * scale,
+            control.rect.height * scale
+        };
+        callControlSetRect(owner + control.offset, scaled);
     }
 
-    Rect scaled = original;
-    if (isBaseRect(original)) {
-        scaled = scaleQueuedActionMarkerRect(original, scale);
-    }
-    else {
-        scaled.left = hudCanvasLeft(scale) + original.left;
+    int transitionCanvasWidth = (screenHeight() * 4) / 3;
+    if (transitionCanvasWidth > screenWidth()) {
+        transitionCanvasWidth = screenWidth();
     }
 
-    if (scaled.left != original.left ||
-        scaled.top != original.top ||
-        scaled.width != original.width ||
-        scaled.height != original.height) {
-        writeMemory(owner + 0x04, &scaled, sizeof(scaled));
-    }
+    const Rect scaledOwner = {
+        (transitionCanvasWidth - (AreaTransitionOwnerRect.width * scale)) / 2,
+        AreaTransitionOwnerRect.top * scale,
+        AreaTransitionOwnerRect.width * scale,
+        AreaTransitionOwnerRect.height * scale
+    };
+    writeMemory(owner + 0x04, &scaledOwner, sizeof(scaledOwner));
 }
 
 }
 
 void scaleHudControls(void* hud) {
-    if (!hud) {
+    if (!hud || (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
         return;
     }
 
@@ -472,7 +508,6 @@ void scaleHudControls(void* hud) {
 
     scaleRootPanel(base);
 
-    scaleActionMenu(base, 0x00BC, scale); // target_action_menu
     scaleActionQueue(base, scale);
     scaleQueuedActionMarkers(base, scale);
     scaleCenteredHudControls(base, scale);
@@ -504,7 +539,7 @@ void scaleAreaTransitionPrompt(void* prompt) {
         return;
     }
 
-    scaleCenteredOwnerRect(static_cast<char*>(prompt), hudScale());
+    scaleAreaTransitionOwner(static_cast<char*>(prompt), hudScale());
 }
 
 }

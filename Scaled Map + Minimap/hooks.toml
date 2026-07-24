@@ -135,9 +135,9 @@ exclude_from_restore = []
 source = "esp+0"
 type = "pointer"
 
-# HUD minimap and floating target/action EXTENT scale.
+# HUD minimap EXTENT scale.
 #
-# Scale only known minimap and floating target/action rectangles as the GUI loads.
+# Scale only known minimap rectangles as the GUI loads.
 [[hooks]]
 address = 0x00409E4D
 type = "detour"

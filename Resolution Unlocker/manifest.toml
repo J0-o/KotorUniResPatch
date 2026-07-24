@@ -1,9 +1,9 @@
 [patch]
 id = "widescreen-resolution-unlock-v1"
 name = "Resolution Unlocker"
-version = "1.1.0"
+version = "1.1.2"
 author = "Lane, J"
-description = "Allows non-stock resolutions and applies the small fallback fixes needed for unsupported widescreen sizes."
+description = "Allows non-stock resolutions, blocks the in-game resolution picker, and applies the fallback fixes needed for unsupported widescreen sizes."
 
 requires = []
 

@@ -1,0 +1,4 @@
+LIBRARY "ScaledFloatingTargetActions"
+EXPORTS
+    scaleFloatingTargetControls
+    correctFloatingTargetVerticalBounds

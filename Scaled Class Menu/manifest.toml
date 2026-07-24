@@ -1,7 +1,7 @@
 [patch]
 id = "class-selection-layout-constants-test-v1"
 name = "Scaled Class Menu"
-version = "1.0"
+version = "1.0.1"
 author = "J"
 description = "Scale class selection menu."
 

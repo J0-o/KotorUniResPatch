@@ -30,24 +30,6 @@ constexpr int ArrowLeft = 47;
 constexpr int ArrowTop = 49;
 constexpr int ArrowSize = 32;
 
-constexpr Rect FloatingTargetActionRects[] = {
-    { 43, 35, 35, 59 },
-    { 45, 49, 32, 32 },
-    { 43, 36, 35, 12 },
-    { 44, 80, 35, 12 },
-    { 83, 35, 35, 59 },
-    { 85, 49, 32, 32 },
-    { 83, 36, 35, 12 },
-    { 84, 80, 35, 12 },
-    { 122, 35, 35, 59 },
-    { 124, 49, 32, 32 },
-    { 122, 36, 35, 12 },
-    { 123, 80, 35, 12 },
-    { 0, 0, 200, 26 },
-    { 0, 27, 200, 6 },
-    { 6, 465, 35, 35 }
-};
-
 bool g_drawActive = false;
 float g_areaMapViewportWidthBeforeGrid = AreaMapViewportWidth;
 float g_areaMapViewportHeightBeforeGrid = AreaMapViewportHeight;
@@ -227,26 +209,6 @@ bool scaleKnownHudMinimapRect(Rect* rect) {
     return false;
 }
 
-int scaleFrom800x600Height(int value) {
-    return static_cast<int>((static_cast<long long>(value) * screenHeight()) / BaseHeight);
-}
-
-bool scaleFloatingTargetActionRect(Rect* rect) {
-    const Rect original = *rect;
-
-    for (const Rect& targetRect : FloatingTargetActionRects) {
-        if (isRect(original, targetRect.left, targetRect.top, targetRect.width, targetRect.height)) {
-            rect->left = scaleFrom800x600Height(rect->left);
-            rect->top = scaleFrom800x600Height(rect->top);
-            rect->width = scaleFrom800x600Height(rect->width);
-            rect->height = scaleFrom800x600Height(rect->height);
-            return true;
-        }
-    }
-
-    return false;
-}
-
 bool isMinimapViewportActive() {
     DWORD viewportIndex = 0;
     if (!safeReadDword(reinterpret_cast<const void*>(ViewportIndexAddress), viewportIndex) ||
@@ -275,11 +237,7 @@ void scaleHudMinimapExtent(Rect* rect, DWORD* stack) {
         return;
     }
 
-    if (scaleKnownHudMinimapRect(rect)) {
-        return;
-    }
-
-    scaleFloatingTargetActionRect(rect);
+    scaleKnownHudMinimapRect(rect);
 }
 
 void prepareHudMinimapScale(void* hud, int* mapX, int* mapY, int* rectWidth, int* rectHeight) {

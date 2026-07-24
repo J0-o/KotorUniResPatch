@@ -8,7 +8,6 @@ constexpr DWORD ConfirmVtable = 0x0074FDB0;
 constexpr DWORD DerivedConfirmVtable = 0x007513F8;
 constexpr DWORD BarkBubbleVtable = 0x00755C60;
 constexpr DWORD PauseVtable = 0x00756DC8;
-constexpr DWORD AreaTransitionVtable = 0x00757508;
 constexpr DWORD DebugVtable = 0x00756B30;
 constexpr DWORD DebugAltVtable = 0x00757A78;
 constexpr DWORD ResolutionVtable = 0x00758348;
@@ -152,7 +151,6 @@ bool isExpectedPopupVtable(DWORD vtable) {
         vtable == DerivedConfirmVtable ||
         vtable == BarkBubbleVtable ||
         vtable == PauseVtable ||
-        vtable == AreaTransitionVtable ||
         vtable == DebugVtable ||
         vtable == DebugAltVtable ||
         vtable == ResolutionVtable ||

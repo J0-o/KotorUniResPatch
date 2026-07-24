@@ -30,6 +30,21 @@ type = "simple"
 original_bytes = [0x40, 0x06, 0x00, 0x00]
 replacement_bytes = [0x00, 0x00, 0x00, 0x00]
 
+# Graphics Options resolution-button callback. DAT_007A3A00 is the current
+# live-game/module pointer: it is null at the main menu and non-null in-game.
+# Allow the original callback at the main menu, but return immediately in-game
+# so the picker cannot replace the externally configured widescreen mode.
+[[hooks]]
+address = 0x006E1660
+type = "replace"
+original_bytes = [0x64, 0xA1, 0x00, 0x00, 0x00, 0x00]
+replacement_bytes = [
+    0x83, 0x3D, 0x00, 0x3A, 0x7A, 0x00, 0x00,
+    0x74, 0x03,
+    0xC2, 0x04, 0x00,
+    0x64, 0xA1, 0x00, 0x00, 0x00, 0x00
+]
+
 # Tooltip crash fix for non-stock widths.
 [[hooks]]
 address = 0x00627802

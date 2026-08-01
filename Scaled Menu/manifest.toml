@@ -1,7 +1,7 @@
 [patch]
 id = "menu-scale-v1"
 name = "Scaled Menu"
-version = "1.0.2"
+version = "1.0.4"
 author = "J"
 description = "Scales and centers main menu"
 

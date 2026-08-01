@@ -10,6 +10,7 @@ constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
 constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
 constexpr DWORD MainInterfaceAddress = 0x00833BB4;
 constexpr DWORD MainMenuVtable = 0x00752F70;
+constexpr DWORD TooltipPanelVtable = 0x00750030;
 constexpr DWORD PazaakPlayerHandBase = 0x2DE0;
 constexpr DWORD PazaakOpponentHandBase = 0x564C;
 constexpr DWORD PazaakCardStride = 0x31C;
@@ -264,8 +265,14 @@ void scalePanelBorder(char* panel, const Rect& scaledPanelRect) {
 
 void scaleMenuPanelTree(void* panel) {
     if (!panel ||
-        isMainInterfacePanel(panel) ||
-        (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+        isMainInterfacePanel(panel)) {
+        return;
+    }
+
+    DWORD vtable = 0;
+    if (safeReadDword(panel, vtable) && vtable == TooltipPanelVtable) {
+        // This is a hidden coordinate canvas, not a visible menu panel.
+        // Scaling its single label tiles icon-only tooltips across the extent.
         return;
     }
 

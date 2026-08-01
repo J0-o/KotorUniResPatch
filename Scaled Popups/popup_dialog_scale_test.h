@@ -11,10 +11,11 @@ struct Rect {
     int height;
 };
 
-void scalePopupDialogPanel(void* owner);
+void scaleCenteredPopup(void* owner, DWORD* returnAddressSlot);
+void scaleLayoutPopup(void* owner);
+void scaleLateResolutionPopup(void* owner);
 void scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot);
 void scaleMessageBoxButtonSetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot);
-void scaleMessageBoxLabelSetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot);
 void scaleMessageBoxAfterFix(void* owner);
 
 }

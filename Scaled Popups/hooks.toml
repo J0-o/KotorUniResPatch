@@ -1,0 +1,108 @@
+# Shared centering dispatcher. The callback filters both the popup vtable and
+# the constructor return address before scaling. The original function then
+# centers the enlarged root against the active screen.
+[[hooks]]
+address = 0x0040A600
+type = "detour"
+function = "scaleCenteredPopup"
+original_bytes = [0x8B, 0x51, 0x0C, 0x56, 0x8B, 0x71, 0x18]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+0"
+type = "pointer"
+
+# Bark and pause dialogs are scaled immediately after their own calls to the
+# shared layout-finalizer. Keeping these constructor-local hooks avoids owning
+# the same engine hook as Scaled Menu.
+[[hooks]]
+address = 0x006A981F
+type = "detour"
+function = "scaleLayoutPopup"
+original_bytes = [0x8D, 0x46, 0x04, 0x8B, 0x08]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+[[hooks]]
+address = 0x006C04D7
+type = "detour"
+function = "scaleLayoutPopup"
+original_bytes = [0x8B, 0x56, 0x08, 0x8B, 0x46, 0x04]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+# XP/item/status quick-message root panels are applied through SetRect.
+[[hooks]]
+address = 0x0040A5A0
+type = "detour"
+function = "scaleStatusSummarySetRect"
+original_bytes = [0x83, 0xEC, 0x10, 0x8B, 0x44, 0x24, 0x14]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+0"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+4"
+type = "pointer"
+
+# FixMessageLabel overwrites the final OK/Cancel extents. Filter the hot button
+# setter by its return address and repair only those message-box writes.
+[[hooks]]
+address = 0x00417A20
+type = "detour"
+function = "scaleMessageBoxButtonSetRect"
+original_bytes = [0x83, 0xEC, 0x30, 0x53, 0x55]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+0"
+type = "pointer"
+
+[[hooks.parameters]]
+source = "esp+4"
+type = "pointer"
+
+# FixMessageLabel has returned and ESI is still the confirm-dialog owner.
+[[hooks]]
+address = 0x006271F1
+type = "detour"
+function = "scaleMessageBoxAfterFix"
+original_bytes = [0x8D, 0x4C, 0x24, 0x18, 0xC7, 0x44, 0x24, 0x10, 0xFF, 0xFF, 0xFF, 0xFF]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+# Resolution controls are populated after the common layout-finalizer, so keep
+# the proven late hook after display-mode enumeration.
+[[hooks]]
+address = 0x006E0BFD
+type = "detour"
+function = "scaleLateResolutionPopup"
+original_bytes = [0x8D, 0x4C, 0x24, 0x34, 0x89, 0x9E, 0x0C, 0x08, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"

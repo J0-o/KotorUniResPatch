@@ -1,0 +1,8 @@
+LIBRARY UniversalPopupScale
+EXPORTS
+    scaleCenteredPopup
+    scaleLayoutPopup
+    scaleLateResolutionPopup
+    scaleStatusSummarySetRect
+    scaleMessageBoxButtonSetRect
+    scaleMessageBoxAfterFix

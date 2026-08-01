@@ -1,0 +1,4 @@
+LIBRARY ResolutionUnlocker
+EXPORTS
+    setResolutionButtonAvailability
+    queueVideoModeResetForAntiAliasChange

@@ -30,20 +30,34 @@ type = "simple"
 original_bytes = [0x40, 0x06, 0x00, 0x00]
 replacement_bytes = [0x00, 0x00, 0x00, 0x00]
 
-# Graphics Options resolution-button callback. DAT_007A3A00 is the current
-# live-game/module pointer: it is null at the main menu and non-null in-game.
-# Allow the original callback at the main menu, but return immediately in-game
-# so the picker cannot replace the externally configured widescreen mode.
+# Disable BTN_RESOLUTION through the normal GUI control state while the virtual
+# machine is active. This leaves the original callback intact and automatically
+# re-enables the button when the same menu is set up at the main menu.
 [[hooks]]
-address = 0x006E1660
-type = "replace"
-original_bytes = [0x64, 0xA1, 0x00, 0x00, 0x00, 0x00]
-replacement_bytes = [
-    0x83, 0x3D, 0x00, 0x3A, 0x7A, 0x00, 0x00,
-    0x74, 0x03,
-    0xC2, 0x04, 0x00,
-    0x64, 0xA1, 0x00, 0x00, 0x00, 0x00
-]
+address = 0x006DEF30
+type = "detour"
+function = "setResolutionButtonAvailability"
+original_bytes = [0xA1, 0xFC, 0x39, 0x7A, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"
+
+# SetNewOptions has committed the requested AA value at this point. If AA
+# changed and no other advanced option is already rebuilding the renderer,
+# queue the game's normal deferred video-mode reset so the new multisample
+# pixel format is applied once from the main loop.
+[[hooks]]
+address = 0x006E022B
+type = "detour"
+function = "queueVideoModeResetForAntiAliasChange"
+original_bytes = [0x39, 0xBE, 0x30, 0x23, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
 
 # Tooltip crash fix for non-stock widths.
 [[hooks]]

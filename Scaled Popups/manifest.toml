@@ -1,7 +1,7 @@
 [patch]
 id = "scaled-popups"
 name = "Scaled Popups"
-version = "0.2.3"
+version = "0.2.4"
 author = "J"
 description = "Scales popup dialogs from the active resolution."
 

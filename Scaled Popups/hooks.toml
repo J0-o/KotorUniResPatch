@@ -17,8 +17,9 @@ source = "esp+0"
 type = "pointer"
 
 # Bark and pause dialogs are scaled immediately after their own calls to the
-# shared layout-finalizer. Keeping these constructor-local hooks avoids owning
-# the same engine hook as Scaled Menu.
+# shared layout-finalizer. The bark root is also centered against the active
+# screen width. Keeping these constructor-local hooks avoids owning the same
+# engine hook as Scaled Menu.
 [[hooks]]
 address = 0x006A981F
 type = "detour"

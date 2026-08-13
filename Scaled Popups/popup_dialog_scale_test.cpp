@@ -17,6 +17,7 @@ constexpr DWORD StatusSummaryVtable = 0x0074FF68;
 
 constexpr int BaseWidth = 800;
 constexpr int BaseHeight = 600;
+constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
 constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
 constexpr DWORD ConfirmCenterReturn = 0x00626FF8;
 constexpr DWORD DebugCenterReturn = 0x006BDDBB;
@@ -84,6 +85,15 @@ int screenHeight() {
     }
 
     return height;
+}
+
+int screenWidth() {
+    int width = 0;
+    if (!safeReadInt(reinterpret_cast<const void*>(ScreenWidthAddress), width) || width <= 0) {
+        return BaseWidth;
+    }
+
+    return width;
 }
 
 int menuWidth() {
@@ -346,7 +356,11 @@ void scaleLayoutPopup(void* ownerPtr) {
     }
 
     scalePanelControls(owner);
-    callControlSetRect(owner, scaledRect(*root));
+    Rect scaledRoot = scaledRect(*root);
+    if (vtable == BarkBubbleVtable) {
+        scaledRoot.left = (screenWidth() - scaledRoot.width) / 2;
+    }
+    callControlSetRect(owner, scaledRoot);
 }
 
 void scaleLateResolutionPopup(void* ownerPtr) {

@@ -1,9 +1,9 @@
 [patch]
 id = "list-item-height-2x-v1"
 name = "2x List Item Height"
-version = "1.0.7"
+version = "1.0.8"
 author = "J"
-description = "Duubles the hight of item list boxes."
+description = "Doubles the hight of item list boxes."
 
 requires = []
 

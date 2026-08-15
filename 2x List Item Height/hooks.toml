@@ -25,6 +25,37 @@ type = "simple"
 original_bytes = [0xBF, 0x38, 0x00, 0x00, 0x00]
 replacement_bytes = [0xBF, 0x70, 0x00, 0x00, 0x00]
 
+# Inventory/store item quantity-label height.
+#
+# The shared item-entry SetExtent routine gives the quantity text at entry
+# offset +0x324 a fixed 0x13-pixel-high rectangle. Double it so glyphs from the
+# 2x font patch are not clipped out of the rectangle.
+[[hooks]]
+address = 0x006B532E
+type = "simple"
+original_bytes = [0xC7, 0x44, 0x24, 0x2C, 0x13, 0x00, 0x00, 0x00]
+replacement_bytes = [0xC7, 0x44, 0x24, 0x2C, 0x26, 0x00, 0x00, 0x00]
+
+# Inventory/store item quantity-label width.
+#
+# SetExtent selects a 0x15- or 0x2A-pixel width based on the digit count.
+# Double both choices for the 2x glyph widths.
+[[hooks]]
+address = 0x006B5337
+type = "simple"
+original_bytes = [0x83, 0xE1, 0x15, 0x83, 0xC1, 0x15]
+replacement_bytes = [0x83, 0xE1, 0x2A, 0x83, 0xC1, 0x2A]
+
+# Inventory/store item quantity-label vertical position.
+#
+# The quantity rectangle is bottom-aligned within the 0x38-pixel item extent
+# with a fixed 0x25-pixel top offset. Double that offset for the 0x70-pixel row.
+[[hooks]]
+address = 0x006B534F
+type = "simple"
+original_bytes = [0x83, 0xC0, 0x25]
+replacement_bytes = [0x83, 0xC0, 0x4A]
+
 # Store inventory/shop item-entry constructor row-height constant.
 #
 # LB_INVITEMS and LB_SHOPITEMS use the sibling item-entry initializer at

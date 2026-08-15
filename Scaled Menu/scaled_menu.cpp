@@ -10,6 +10,7 @@ constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
 constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
 constexpr DWORD MainInterfaceAddress = 0x00833BB4;
 constexpr DWORD MainMenuVtable = 0x00752F70;
+constexpr DWORD FadePanelVtable = 0x0074FC60;
 constexpr DWORD TooltipPanelVtable = 0x00750030;
 constexpr DWORD PazaakPlayerHandBase = 0x2DE0;
 constexpr DWORD PazaakOpponentHandBase = 0x564C;
@@ -138,6 +139,11 @@ bool isMainInterfacePanel(void* panel) {
 bool isMainMenuPanel(void* panel) {
     DWORD vtable = 0;
     return safeReadDword(panel, vtable) && vtable == MainMenuVtable;
+}
+
+bool isFadePanel(void* panel) {
+    DWORD vtable = 0;
+    return safeReadDword(panel, vtable) && vtable == FadePanelVtable;
 }
 
 ScaleState makeMenuScale(int baseWidth, int baseHeight) {
@@ -278,6 +284,12 @@ void scaleMenuPanelTree(void* panel) {
 
     Rect* rect = reinterpret_cast<Rect*>(static_cast<char*>(panel) + 0x04);
     if (!hasUsefulRect(*rect)) {
+        return;
+    }
+
+    if (isFadePanel(panel)) {
+        const Rect fullscreen = { 0, 0, screenWidth(), screenHeight() };
+        callControlSetRect(static_cast<char*>(panel), fullscreen);
         return;
     }
 

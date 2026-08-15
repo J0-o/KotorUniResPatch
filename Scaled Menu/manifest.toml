@@ -1,9 +1,9 @@
 [patch]
 id = "menu-scale-v1"
 name = "Scaled Menu"
-version = "1.0.4"
+version = "1.0.5"
 author = "J"
-description = "Scales and centers main menu"
+description = "Scales and centers menus and full-screen fades"
 
 requires = ["widescreen-resolution-unlock-v1"]
 

@@ -1,7 +1,7 @@
 [patch]
 id = "container-popup-scale-test-v1"
-name = "Scale Container Popup"
-version = "1.0.4"
+name = "Scaled Container Popup"
+version = "1.0.5"
 author = "J"
 description = "Scales container/loot popup and it's buttons."
 

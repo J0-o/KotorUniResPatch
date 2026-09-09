@@ -1,11 +1,11 @@
 [patch]
 id = "scaled-popups"
 name = "Scaled Popups"
-version = "0.2.4"
+version = "0.5.1"
 author = "J"
-description = "Scales popup dialogs from the active resolution."
+description = "Scales popup dialogs with the configurable Scaled Kotor content factor."
 
-requires = ["container-popup-scale-test-v1"]
+requires = ["scaled-kotor", "container-popup-scale-test-v1"]
 
 conflicts = [
     "2x-popup-messages-v1",

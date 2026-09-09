@@ -1,11 +1,11 @@
 [patch]
 id = "area-map-hud-minimap-2x-scale-v1"
 name = "Scaled Map + Minimap"
-version = "1.0.3"
+version = "1.1.0"
 author = "J"
-description = "Scales the full-screen area/menu map and HUD minimap together by a screen-height-derived integer scale so shared map coordinates remain consistent."
+description = "Scales the full-screen area/menu map and HUD minimap together with the shared UI scale."
 
-requires = ["widescreen-resolution-unlock-v1"]
+requires = ["scaled-kotor"]
 
 conflicts = ["menu-map-scale-v1", "hud-minimap-scale-v1", "hud-minimap-2x-scale-v1", "widescreen-ui-scale-v1", "widescreen-ui-scale"]
 

@@ -1,10 +1,11 @@
 #include "scaled_map.h"
+#include "../Common/ResolutionScale.h"
 
 namespace WidescreenUiScale {
 
 namespace {
 
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
+constexpr int UiBaseHeight = 480;
 constexpr int AreaMapTextureWidth = 512;
 constexpr int AreaMapTextureHeight = 256;
 constexpr int AreaMapViewportWidth = 440;
@@ -58,17 +59,6 @@ bool safeReadDword(const void* address, DWORD& value) {
     }
 }
 
-bool safeReadInt(const void* address, int& value) {
-    __try {
-        value = *reinterpret_cast<const int*>(address);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        value = 0;
-        return false;
-    }
-}
-
 bool safeReadRect(const void* address, Rect& value) {
     __try {
         value = *reinterpret_cast<const Rect*>(address);
@@ -80,18 +70,8 @@ bool safeReadRect(const void* address, Rect& value) {
     }
 }
 
-int screenHeight() {
-    int height = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenHeightAddress), height) || height <= 0) {
-        return BaseHeight;
-    }
-
-    return height;
-}
-
-int mapScale() {
-    const int roundedScale = (screenHeight() + (BaseHeight / 2)) / BaseHeight;
-    return roundedScale > 1 ? roundedScale : 1;
+int scaleMapValue(int value, const UniversalScaleState& scale) {
+    return scaleUiValueFromBase(value, BaseHeight, UiBaseHeight, scale);
 }
 
 void setControlSize(char* control, int width, int height) {
@@ -125,14 +105,13 @@ void setControlRect(char* control, const Rect& rect) {
     writeMemory(control + 0x04, &rect, sizeof(rect));
 }
 
-int scaledMarkerDimension(int value) {
-    return value > 0 ? value * mapScale() : value;
+int scaledMarkerDimension(int value, const UniversalScaleState& scale) {
+    return value > 0 ? scaleMapValue(value, scale) : value;
 }
 
-void patchAreaMapCoordinateBounds() {
-    const int scale = mapScale();
-    const int viewportWidth = AreaMapViewportWidth * scale;
-    const int viewportHeight = AreaMapViewportHeight * scale;
+void patchAreaMapCoordinateBounds(const UniversalScaleState& scale) {
+    const int viewportWidth = scaleMapValue(AreaMapViewportWidth, scale);
+    const int viewportHeight = scaleMapValue(AreaMapViewportHeight, scale);
 
     writeInt(0x00579009, viewportWidth);
     writeInt(0x0057901A, viewportHeight);
@@ -151,25 +130,23 @@ void patchAreaMapCoordinateBounds() {
     writeFloat(0x007455D4, static_cast<float>(viewportHeight));
 }
 
-void patchAreaMapIconMaterialSizes() {
-    const int scale = mapScale();
-    writeInt(0x0069405B, ArrowIconSize * scale);
-    writeInt(0x006940DC, CircleIconSize * scale);
-    writeInt(0x0069418F, TargetIconSize * scale);
+void patchAreaMapIconMaterialSizes(const UniversalScaleState& scale) {
+    writeInt(0x0069405B, scaleMapValue(ArrowIconSize, scale));
+    writeInt(0x006940DC, scaleMapValue(CircleIconSize, scale));
+    writeInt(0x0069418F, scaleMapValue(TargetIconSize, scale));
 }
 
-void patchAreaMapEngineDimensions() {
-    const int scale = mapScale();
-    writeInt(0x0069505C, AreaMapTextureWidth * scale);
-    writeInt(0x00695064, AreaMapTextureHeight * scale);
-    writeInt(0x00695082, AreaMapViewportWidth * scale);
-    writeInt(0x0069508A, AreaMapViewportHeight * scale);
+void patchAreaMapEngineDimensions(const UniversalScaleState& scale) {
+    writeInt(0x0069505C, scaleMapValue(AreaMapTextureWidth, scale));
+    writeInt(0x00695064, scaleMapValue(AreaMapTextureHeight, scale));
+    writeInt(0x00695082, scaleMapValue(AreaMapViewportWidth, scale));
+    writeInt(0x0069508A, scaleMapValue(AreaMapViewportHeight, scale));
 
-    patchAreaMapCoordinateBounds();
-    patchAreaMapIconMaterialSizes();
+    patchAreaMapCoordinateBounds(scale);
+    patchAreaMapIconMaterialSizes(scale);
 }
 
-void scaleLiveMenuMapControlSizes(void* map) {
+void scaleLiveMenuMapControlSizes(void* map, const UniversalScaleState& scale) {
     if (!map) {
         return;
     }
@@ -178,9 +155,8 @@ void scaleLiveMenuMapControlSizes(void* map) {
     char* mapView = base + MapViewOffset;
     char* mapHider = base + MapHiderOffset;
     char* mapTexture = base + MapTextureOffset;
-    const int scale = mapScale();
-    const int viewportWidth = AreaMapViewportWidth * scale;
-    const int viewportHeight = AreaMapViewportHeight * scale;
+    const int viewportWidth = scaleMapValue(AreaMapViewportWidth, scale);
+    const int viewportHeight = scaleMapValue(AreaMapViewportHeight, scale);
 
     Rect mapViewRect = {};
     if (safeReadRect(mapView + 0x04, mapViewRect)) {
@@ -195,31 +171,52 @@ void scaleLiveMenuMapControlSizes(void* map) {
     }
 
     setControlRect(mapHider, makeRect(0, 0, viewportWidth, viewportHeight));
-    setControlRect(mapTexture, makeRect(0, 0, AreaMapTextureWidth * scale, AreaMapTextureHeight * scale));
+    setControlRect(mapTexture, makeRect(
+        0, 0,
+        scaleMapValue(AreaMapTextureWidth, scale),
+        scaleMapValue(AreaMapTextureHeight, scale)));
 }
 
 }
 
 void prepareMenuMapScale(void* map) {
-    patchAreaMapEngineDimensions();
-    scaleLiveMenuMapControlSizes(map);
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
+        return;
+    }
+
+    patchAreaMapEngineDimensions(*scale);
+    scaleLiveMenuMapControlSizes(map, *scale);
 }
 
 void prepareMenuMapIconMaterials() {
-    patchAreaMapIconMaterialSizes();
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
+        return;
+    }
+
+    patchAreaMapIconMaterialSizes(*scale);
 }
 
 void prepareMenuMapDraw(void* map, int* width) {
-    patchAreaMapEngineDimensions();
-    scaleLiveMenuMapControlSizes(map);
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
+        return;
+    }
+
+    patchAreaMapEngineDimensions(*scale);
+    scaleLiveMenuMapControlSizes(map, *scale);
 
     if (width) {
-        *width = AreaMapViewportWidth * mapScale();
+        *width = scaleMapValue(AreaMapViewportWidth, *scale);
     }
 }
 
 void prepareMenuMapMarkerDraw(Rect* rect) {
+    const UniversalScaleState* scale = ResolutionScale::get();
     if (!rect ||
+        !scale ||
+        (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight) ||
         rect->width <= 0 ||
         rect->height <= 0 ||
         rect->width > 64 ||
@@ -227,8 +224,8 @@ void prepareMenuMapMarkerDraw(Rect* rect) {
         return;
     }
 
-    const int scaledWidth = scaledMarkerDimension(rect->width);
-    const int scaledHeight = scaledMarkerDimension(rect->height);
+    const int scaledWidth = scaledMarkerDimension(rect->width, *scale);
+    const int scaledHeight = scaledMarkerDimension(rect->height, *scale);
     rect->left -= (scaledWidth - rect->width) / 2;
     rect->top -= (scaledHeight - rect->height) / 2;
     rect->width = scaledWidth;
@@ -236,7 +233,12 @@ void prepareMenuMapMarkerDraw(Rect* rect) {
 }
 
 void prepareAreaMapDimensionsForScreen() {
-    patchAreaMapEngineDimensions();
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
+        return;
+    }
+
+    patchAreaMapEngineDimensions(*scale);
 }
 
 }

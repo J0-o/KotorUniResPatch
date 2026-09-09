@@ -1,11 +1,11 @@
 [patch]
-id = "scaled-scrollbars-v1"
-name = "Scaled Scrollbars"
-version = "2.2.0"
+id = "scaled-kotor"
+name = "Scaled Kotor"
+version = "1.4.0"
 author = "J"
-description = "Scales all scrollbars from the resolution-derived Scaled Kotor layout scale."
+description = "Provides resolution-derived layout sizing and configurable content scaling through ScaledKotor.ini."
 
-requires = ["scaled-kotor"]
+requires = ["widescreen-resolution-unlock-v1"]
 
 conflicts = []
 

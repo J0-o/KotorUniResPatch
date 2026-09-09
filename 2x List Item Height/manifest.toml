@@ -1,11 +1,11 @@
 [patch]
 id = "list-item-height-2x-v1"
 name = "2x List Item Height"
-version = "1.0.8"
+version = "2.2.1"
 author = "J"
-description = "Doubles the hight of item list boxes."
+description = "Scales item list-box rows relative to a 1x baseline at 1080p."
 
-requires = []
+requires = ["scaled-kotor"]
 
 conflicts = []
 

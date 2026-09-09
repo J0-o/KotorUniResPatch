@@ -8,9 +8,17 @@ extern "C" void __cdecl scaleCenteredPopup(void* owner, DWORD* returnAddressSlot
     }
 }
 
-extern "C" void __cdecl scaleLayoutPopup(void* owner) {
+extern "C" void __cdecl scaleBarkPopup(void* owner) {
     __try {
-        PopupDialogScaleTest::scaleLayoutPopup(owner);
+        PopupDialogScaleTest::scaleLayoutPopup(owner, true);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
+extern "C" void __cdecl scalePausePopup(void* owner) {
+    __try {
+        PopupDialogScaleTest::scaleLayoutPopup(owner, false);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }

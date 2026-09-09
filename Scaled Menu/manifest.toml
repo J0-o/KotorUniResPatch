@@ -1,11 +1,11 @@
 [patch]
 id = "menu-scale-v1"
 name = "Scaled Menu"
-version = "1.0.5"
+version = "1.1.0"
 author = "J"
 description = "Scales and centers menus and full-screen fades"
 
-requires = ["widescreen-resolution-unlock-v1"]
+requires = ["scaled-kotor"]
 
 conflicts = ["widescreen-ui-scale-v1", "widescreen-ui-scale"]
 

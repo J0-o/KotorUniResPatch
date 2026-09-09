@@ -23,7 +23,7 @@ type = "pointer"
 [[hooks]]
 address = 0x006A981F
 type = "detour"
-function = "scaleLayoutPopup"
+function = "scaleBarkPopup"
 original_bytes = [0x8D, 0x46, 0x04, 0x8B, 0x08]
 exclude_from_restore = []
 
@@ -34,7 +34,7 @@ type = "pointer"
 [[hooks]]
 address = 0x006C04D7
 type = "detour"
-function = "scaleLayoutPopup"
+function = "scalePausePopup"
 original_bytes = [0x8B, 0x56, 0x08, 0x8B, 0x46, 0x04]
 exclude_from_restore = []
 

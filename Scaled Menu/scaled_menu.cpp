@@ -1,4 +1,5 @@
 #include "scaled_menu.h"
+#include "../Common/ResolutionScale.h"
 
 namespace MenuScale {
 
@@ -6,8 +7,6 @@ namespace {
 
 constexpr int BaseWidth = 800;
 constexpr int BaseHeight = 600;
-constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
 constexpr DWORD MainInterfaceAddress = 0x00833BB4;
 constexpr DWORD MainMenuVtable = 0x00752F70;
 constexpr DWORD FadePanelVtable = 0x0074FC60;
@@ -55,17 +54,6 @@ bool safeReadDword(const void* address, DWORD& value) {
     }
 }
 
-bool safeReadInt(const void* address, int& value) {
-    __try {
-        value = *reinterpret_cast<const int*>(address);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        value = 0;
-        return false;
-    }
-}
-
 bool writeMemory(void* address, const void* replacement, size_t size) {
     __try {
         DWORD oldProtect = 0;
@@ -86,24 +74,6 @@ bool writeMemory(void* address, const void* replacement, size_t size) {
 
 void writeInt(int address, int value) {
     writeMemory(reinterpret_cast<void*>(address), &value, sizeof(value));
-}
-
-int screenWidth() {
-    int width = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenWidthAddress), width) || width <= 0) {
-        return BaseWidth;
-    }
-
-    return width;
-}
-
-int screenHeight() {
-    int height = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenHeightAddress), height) || height <= 0) {
-        return BaseHeight;
-    }
-
-    return height;
 }
 
 int scaleValue(int value, int target, int source) {
@@ -146,31 +116,25 @@ bool isFadePanel(void* panel) {
     return safeReadDword(panel, vtable) && vtable == FadePanelVtable;
 }
 
-ScaleState makeMenuScale(int baseWidth, int baseHeight) {
-    int targetHeight = screenHeight();
-    int targetWidth = scaleValue(baseWidth, targetHeight, baseHeight);
-
-    if (targetWidth > screenWidth()) {
-        targetWidth = screenWidth();
-        targetHeight = scaleValue(baseHeight, targetWidth, baseWidth);
-    }
-
+ScaleState makeMenuScale(int baseWidth, int baseHeight,
+                         const UniversalScaleState& universalScale) {
     return {
         baseWidth,
         baseHeight,
-        targetWidth,
-        targetHeight,
-        (screenWidth() - targetWidth) / 2,
-        (screenHeight() - targetHeight) / 2
+        universalScale.uiWidth,
+        universalScale.uiHeight,
+        (universalScale.screenWidth - universalScale.uiWidth) / 2,
+        (universalScale.screenHeight - universalScale.uiHeight) / 2
     };
 }
 
-ScaleState makeFullscreenMenuScale(int baseWidth, int baseHeight) {
+ScaleState makeFullscreenMenuScale(int baseWidth, int baseHeight,
+                                   const UniversalScaleState& universalScale) {
     return {
         baseWidth,
         baseHeight,
-        screenWidth(),
-        screenHeight(),
+        universalScale.screenWidth,
+        universalScale.screenHeight,
         0,
         0
     };
@@ -270,7 +234,9 @@ void scalePanelBorder(char* panel, const Rect& scaledPanelRect) {
 }
 
 void scaleMenuPanelTree(void* panel) {
+    const UniversalScaleState* universalScale = ResolutionScale::get();
     if (!panel ||
+        !universalScale ||
         isMainInterfacePanel(panel)) {
         return;
     }
@@ -288,7 +254,9 @@ void scaleMenuPanelTree(void* panel) {
     }
 
     if (isFadePanel(panel)) {
-        const Rect fullscreen = { 0, 0, screenWidth(), screenHeight() };
+        const Rect fullscreen = {
+            0, 0, universalScale->screenWidth, universalScale->screenHeight
+        };
         callControlSetRect(static_cast<char*>(panel), fullscreen);
         return;
     }
@@ -300,13 +268,14 @@ void scaleMenuPanelTree(void* panel) {
         original.top == 0 &&
         original.width == BaseWidth &&
         original.height == BaseHeight) {
-        scale = makeFullscreenMenuScale(original.width, original.height);
+        scale = makeFullscreenMenuScale(
+            original.width, original.height, *universalScale);
     }
     else if (isTopTabRoot(original)) {
-        scale = makeMenuScale(640, 480);
+        scale = makeMenuScale(640, 480, *universalScale);
     }
     else if (isFourByThreeRoot(original)) {
-        scale = makeMenuScale(original.width, original.height);
+        scale = makeMenuScale(original.width, original.height, *universalScale);
     }
     else {
         return;
@@ -321,12 +290,15 @@ void scaleMenuPanelTree(void* panel) {
 }
 
 void scalePazaakGameCards(void* pazaakGame) {
-    if (!pazaakGame ||
-        (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+    const UniversalScaleState* universalScale = ResolutionScale::get();
+    if (!pazaakGame || !universalScale ||
+        (universalScale->uiWidth == BaseWidth &&
+         universalScale->uiHeight == BaseHeight)) {
         return;
     }
 
-    const ScaleState scale = makeMenuScale(BaseWidth, BaseHeight);
+    const ScaleState scale = makeMenuScale(
+        BaseWidth, BaseHeight, *universalScale);
     char* base = static_cast<char*>(pazaakGame);
     for (const PazaakCardRect& card : PazaakHandCards) {
         setPazaakCardRect(base, card, scale);

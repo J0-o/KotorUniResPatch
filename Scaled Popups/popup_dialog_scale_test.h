@@ -12,7 +12,7 @@ struct Rect {
 };
 
 void scaleCenteredPopup(void* owner, DWORD* returnAddressSlot);
-void scaleLayoutPopup(void* owner);
+void scaleLayoutPopup(void* owner, bool centerHorizontally);
 void scaleLateResolutionPopup(void* owner);
 void scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot);
 void scaleMessageBoxButtonSetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot);

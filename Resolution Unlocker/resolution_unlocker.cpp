@@ -7,7 +7,6 @@ constexpr uintptr_t AppManagerPointerAddress = 0x007A39FC;
 constexpr uintptr_t PreviousAntiAliasAddress = 0x0078D440;
 constexpr uintptr_t RequestedAntiAliasAddress = 0x007A6888;
 constexpr uintptr_t VideoModeChangeRequestAddress = 0x007A3A2C;
-
 constexpr size_t ClientAppOffset = 0x04;
 constexpr size_t ResolutionButtonOffset = 0x08BC;
 constexpr size_t AdvancedOptionsReinitOffset = 0x2330;

@@ -1,4 +1,5 @@
 #include "menu_background_shift_test.h"
+#include "../Common/ResolutionScale.h"
 
 namespace MenuBackgroundShiftTest {
 
@@ -9,14 +10,8 @@ constexpr DWORD BackgroundLeftOffset = 0x04;
 constexpr DWORD BackgroundWidthOffset = 0x0C;
 constexpr DWORD BackgroundNameOffset = 0x54;
 constexpr DWORD BackgroundChildVtable = 0x0073E338;
-constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
-constexpr int BaseWidth = 800;
-constexpr int BaseHeight = 600;
 constexpr int ImageWidth = 4096;
 constexpr int CenterSafeWidth = 2048;
-constexpr int SafeAspectWidth = 4;
-constexpr int SafeAspectHeight = 3;
 constexpr char MenuBackgroundName[] = "800x600back";
 constexpr char ComputerBackgroundName[] = "800x600comp0";
 constexpr char PazaakBackgroundName[] = "800x600pazaak";
@@ -40,27 +35,11 @@ bool stringEquals(const char* actual, const char* expected) {
     }
 }
 
-int readPositiveInt(DWORD address, int fallback) {
-    int value = 0;
-    __try {
-        value = *reinterpret_cast<int*>(address);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        value = 0;
-    }
-
-    return value > 0 ? value : fallback;
-}
-
-int scaleWidthFromHeight(int height) {
-    constexpr int numerator = ImageWidth * SafeAspectWidth;
-    constexpr int denominator = CenterSafeWidth * SafeAspectHeight;
-    return static_cast<int>((static_cast<long long>(height) * numerator + denominator / 2) / denominator);
-}
-
-void centerControlFor4096Background(char* control, int screenWidth, int screenHeight) {
-    int backgroundWidth = scaleWidthFromHeight(screenHeight);
-    int backgroundLeft = (screenWidth - backgroundWidth) / 2;
+void centerControlFor4096Background(char* control,
+                                    const UniversalScaleState& scale) {
+    const int backgroundWidth = static_cast<int>(
+        (static_cast<long long>(scale.uiWidth) * ImageWidth) / CenterSafeWidth);
+    const int backgroundLeft = (scale.screenWidth - backgroundWidth) / 2;
 
     *reinterpret_cast<int*>(control + BackgroundLeftOffset) = backgroundLeft;
     *reinterpret_cast<int*>(control + BackgroundWidthOffset) = backgroundWidth;
@@ -79,7 +58,8 @@ bool isKnownBackgroundName(const char* name) {
 }
 
 void centerMenuBackgroundDynamic(void* parent) {
-    if (!parent) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!parent || !scale) {
         return;
     }
 
@@ -95,9 +75,7 @@ void centerMenuBackgroundDynamic(void* parent) {
             return;
         }
 
-        int screenWidth = readPositiveInt(ScreenWidthAddress, BaseWidth);
-        int screenHeight = readPositiveInt(ScreenHeightAddress, BaseHeight);
-        centerControlFor4096Background(child, screenWidth, screenHeight);
+        centerControlFor4096Background(child, *scale);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }

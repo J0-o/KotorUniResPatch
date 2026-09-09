@@ -1,10 +1,13 @@
 #include "scaled_minimap.h"
+#include "../Common/ResolutionScale.h"
 
 namespace HudMinimapScale {
 
 namespace {
 
 constexpr int BaseHeight = 600;
+constexpr int BaseWidth = 800;
+constexpr int UiBaseHeight = 480;
 constexpr float AreaMapViewportWidth = 440.0f;
 constexpr float AreaMapViewportHeight = 256.0f;
 constexpr DWORD AreaMapViewportWidthAddress = 0x00747748;
@@ -12,7 +15,6 @@ constexpr DWORD AreaMapViewportHeightAddress = 0x007455D4;
 constexpr int MinimapViewportSize = 120;
 constexpr int MinimapTextureSize = 512;
 constexpr int MinimapAtlasHalfHeight = 256;
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
 constexpr DWORD ViewportIndexAddress = 0x007B9460;
 constexpr DWORD ViewportWidthAddress = 0x007B946C;
 constexpr DWORD ViewportHeightAddress = 0x007B946E;
@@ -64,17 +66,6 @@ bool safeReadDword(const void* address, DWORD& value) {
     }
 }
 
-bool safeReadInt(const void* address, int& value) {
-    __try {
-        value = *reinterpret_cast<const int*>(address);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        value = 0;
-        return false;
-    }
-}
-
 bool safeReadShort(const void* address, short& value) {
     __try {
         value = *reinterpret_cast<const short*>(address);
@@ -111,18 +102,12 @@ void restoreAreaMapViewportAfterGrid() {
     g_haveAreaMapViewportBeforeGrid = false;
 }
 
-int screenHeight() {
-    int height = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenHeightAddress), height) || height <= 0) {
-        return BaseHeight;
-    }
-
-    return height;
+int scaleMinimapValue(int value, const UniversalScaleState& scale) {
+    return scaleUiValueFromBase(value, BaseHeight, UiBaseHeight, scale);
 }
 
-int minimapScale() {
-    const int roundedScale = (screenHeight() + (BaseHeight / 2)) / BaseHeight;
-    return roundedScale > 1 ? roundedScale : 1;
+bool isNativeScale(const UniversalScaleState& scale) {
+    return scale.uiWidth == BaseWidth && scale.uiHeight == BaseHeight;
 }
 
 void callControlSetRect(char* control, const Rect& rect) {
@@ -162,54 +147,53 @@ bool isRect(const Rect& rect, int left, int top, int width, int height) {
         rect.height == height;
 }
 
-bool scaleKnownHudMinimapRect(Rect* rect) {
+bool scaleKnownHudMinimapRect(Rect* rect, const UniversalScaleState& scale) {
     const Rect original = *rect;
-    const int scale = minimapScale();
 
     if (isRect(original, BorderLeft, BorderTop, BorderWidth, BorderHeight)) {
-        rect->left = BorderLeft * scale;
-        rect->top = BorderTop * scale;
-        rect->width = BorderWidth * scale;
-        rect->height = BorderHeight * scale;
+        rect->left = scaleMinimapValue(BorderLeft, scale);
+        rect->top = scaleMinimapValue(BorderTop, scale);
+        rect->width = scaleMinimapValue(BorderWidth, scale);
+        rect->height = scaleMinimapValue(BorderHeight, scale);
         return true;
     }
 
     if (isRect(original, MapViewLeft, MapViewTop, MinimapTextureSize, MinimapTextureSize)) {
-        rect->left = MapViewLeft * scale;
-        rect->top = MapViewTop * scale;
+        rect->left = scaleMinimapValue(MapViewLeft, scale);
+        rect->top = scaleMinimapValue(MapViewTop, scale);
         rect->width = MinimapTextureSize;
         rect->height = MinimapTextureSize;
         return true;
     }
 
     if (isRect(original, MapViewLeft, MapViewTop, MinimapViewportSize, MinimapViewportSize)) {
-        rect->left = MapViewLeft * scale;
-        rect->top = MapViewTop * scale;
-        rect->width = MinimapViewportSize * scale;
-        rect->height = MinimapViewportSize * scale;
+        rect->left = scaleMinimapValue(MapViewLeft, scale);
+        rect->top = scaleMinimapValue(MapViewTop, scale);
+        rect->width = scaleMinimapValue(MinimapViewportSize, scale);
+        rect->height = scaleMinimapValue(MinimapViewportSize, scale);
         return true;
     }
 
     if (isRect(original, FogViewLeft, FogViewTop, FogViewSize, FogViewSize)) {
-        rect->left = FogViewLeft * scale;
-        rect->top = FogViewTop * scale;
-        rect->width = FogViewSize * scale;
-        rect->height = FogViewSize * scale;
+        rect->left = scaleMinimapValue(FogViewLeft, scale);
+        rect->top = scaleMinimapValue(FogViewTop, scale);
+        rect->width = scaleMinimapValue(FogViewSize, scale);
+        rect->height = scaleMinimapValue(FogViewSize, scale);
         return true;
     }
 
     if (isRect(original, ArrowLeft, ArrowTop, ArrowSize, ArrowSize)) {
-        rect->left = ArrowLeft * scale;
-        rect->top = ArrowTop * scale;
-        rect->width = ArrowSize * scale;
-        rect->height = ArrowSize * scale;
+        rect->left = scaleMinimapValue(ArrowLeft, scale);
+        rect->top = scaleMinimapValue(ArrowTop, scale);
+        rect->width = scaleMinimapValue(ArrowSize, scale);
+        rect->height = scaleMinimapValue(ArrowSize, scale);
         return true;
     }
 
     return false;
 }
 
-bool isMinimapViewportActive() {
+bool isMinimapViewportActive(const UniversalScaleState& scale) {
     DWORD viewportIndex = 0;
     if (!safeReadDword(reinterpret_cast<const void*>(ViewportIndexAddress), viewportIndex) ||
         viewportIndex > 31) {
@@ -224,7 +208,7 @@ bool isMinimapViewportActive() {
         return false;
     }
 
-    const int viewportSize = MinimapViewportSize * minimapScale();
+    const int viewportSize = scaleMinimapValue(MinimapViewportSize, scale);
     return width == viewportSize && height == viewportSize;
 }
 
@@ -233,51 +217,52 @@ bool isMinimapViewportActive() {
 void scaleHudMinimapExtent(Rect* rect, DWORD* stack) {
     UNREFERENCED_PARAMETER(stack);
 
-    if (!rect) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!rect || !scale || isNativeScale(*scale)) {
         return;
     }
 
-    scaleKnownHudMinimapRect(rect);
+    scaleKnownHudMinimapRect(rect, *scale);
 }
 
 void prepareHudMinimapScale(void* hud, int* mapX, int* mapY, int* rectWidth, int* rectHeight) {
     UNREFERENCED_PARAMETER(rectWidth);
     UNREFERENCED_PARAMETER(rectHeight);
 
-    if (!hud) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!hud || !scale || isNativeScale(*scale)) {
         return;
     }
 
     g_drawActive = true;
 
-    const int scale = minimapScale();
-    if (scale > 1) {
-        if (mapX) {
-            *mapX /= scale;
-        }
-        if (mapY) {
-            *mapY /= scale;
-        }
+    if (mapX) {
+        *mapX = unscaleUiValueToBase(
+            *mapX, BaseHeight, UiBaseHeight, *scale);
+    }
+    if (mapY) {
+        *mapY = unscaleUiValueToBase(
+            *mapY, BaseHeight, UiBaseHeight, *scale);
     }
 
-    const int viewportSize = MinimapViewportSize * scale;
+    const int viewportSize = scaleMinimapValue(MinimapViewportSize, *scale);
     char* base = static_cast<char*>(hud);
     writeMemory(base + 0x6088, &viewportSize, sizeof(viewportSize));
     writeMemory(base + 0x608C, &viewportSize, sizeof(viewportSize));
 
     Rect borderRect = {
-        BorderLeft * scale,
-        BorderTop * scale,
-        BorderWidth * scale,
-        BorderHeight * scale
+        scaleMinimapValue(BorderLeft, *scale),
+        scaleMinimapValue(BorderTop, *scale),
+        scaleMinimapValue(BorderWidth, *scale),
+        scaleMinimapValue(BorderHeight, *scale)
     };
     setControlRect(base + 0x5CC0, borderRect);
 
     Rect arrowRect = {
-        (viewportSize - (ArrowSize * scale)) / 2,
-        (viewportSize - (ArrowSize * scale)) / 2,
-        ArrowSize * scale,
-        ArrowSize * scale
+        (viewportSize - scaleMinimapValue(ArrowSize, *scale)) / 2,
+        (viewportSize - scaleMinimapValue(ArrowSize, *scale)) / 2,
+        scaleMinimapValue(ArrowSize, *scale),
+        scaleMinimapValue(ArrowSize, *scale)
     };
     setControlRect(base + 0x5F40, arrowRect);
     setControlRect(base + 0x6098, arrowRect);
@@ -286,7 +271,10 @@ void prepareHudMinimapScale(void* hud, int* mapX, int* mapY, int* rectWidth, int
 void zoomHudMinimapImageDraw(void* image, int* x, int* y, int* width, int* height) {
     UNREFERENCED_PARAMETER(image);
 
-    if (!x || !y || !width || !height || (!g_drawActive && !isMinimapViewportActive())) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || isNativeScale(*scale) ||
+        !x || !y || !width || !height ||
+        (!g_drawActive && !isMinimapViewportActive(*scale))) {
         return;
     }
 
@@ -299,16 +287,16 @@ void zoomHudMinimapImageDraw(void* image, int* x, int* y, int* width, int* heigh
         return;
     }
 
-    const int scale = minimapScale();
-    const int viewportCenter = (MinimapViewportSize * scale) / 2;
-    *x = viewportCenter + ((*x - viewportCenter) * scale);
-    *y = viewportCenter + ((*y - viewportCenter) * scale);
-    *width = originalWidth * scale;
-    *height = originalHeight * scale;
+    const int viewportCenter = scaleMinimapValue(MinimapViewportSize, *scale) / 2;
+    *x = viewportCenter + scaleMinimapValue(*x - viewportCenter, *scale);
+    *y = viewportCenter + scaleMinimapValue(*y - viewportCenter, *scale);
+    *width = scaleMinimapValue(originalWidth, *scale);
+    *height = scaleMinimapValue(originalHeight, *scale);
 }
 
 void beginHudMinimapGridZoom(void* hud, Rect* rect) {
-    if (!hud || !rect) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!hud || !rect || !scale || isNativeScale(*scale)) {
         return;
     }
 
@@ -329,8 +317,7 @@ void beginHudMinimapGridZoom(void* hud, Rect* rect) {
         &AreaMapViewportHeight,
         sizeof(AreaMapViewportHeight));
 
-    const int scale = minimapScale();
-    const int viewportSize = MinimapViewportSize * scale;
+    const int viewportSize = scaleMinimapValue(MinimapViewportSize, *scale);
     const int gridBasis = MinimapViewportSize;
     const int centerShift = (viewportSize - gridBasis) / 2;
     char* base = static_cast<char*>(hud);
@@ -344,12 +331,13 @@ void beginHudMinimapGridZoom(void* hud, Rect* rect) {
 void endHudMinimapGridZoom(void* hud) {
     restoreAreaMapViewportAfterGrid();
 
-    if (!hud) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!hud || !scale || isNativeScale(*scale)) {
         g_drawActive = false;
         return;
     }
 
-    const int viewportSize = MinimapViewportSize * minimapScale();
+    const int viewportSize = scaleMinimapValue(MinimapViewportSize, *scale);
     char* base = static_cast<char*>(hud);
     writeMemory(base + 0x6088, &viewportSize, sizeof(viewportSize));
     writeMemory(base + 0x608C, &viewportSize, sizeof(viewportSize));

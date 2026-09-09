@@ -1,7 +1,8 @@
 LIBRARY UniversalPopupScale
 EXPORTS
     scaleCenteredPopup
-    scaleLayoutPopup
+    scaleBarkPopup
+    scalePausePopup
     scaleLateResolutionPopup
     scaleStatusSummarySetRect
     scaleMessageBoxButtonSetRect

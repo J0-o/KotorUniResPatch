@@ -1,11 +1,14 @@
 #include "scaled_floating_target.h"
+#include "../Common/ResolutionScale.h"
 
 namespace FloatingTargetScale {
 
 namespace {
 
+constexpr int BaseWidth = 800;
 constexpr int BaseHeight = 600;
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
+constexpr int UiBaseWidth = 640;
+constexpr int UiBaseHeight = 480;
 constexpr DWORD TargetMenuBase = 0x54;
 constexpr DWORD TargetMenuStride = 0x71C;
 constexpr DWORD PauseControlOffset = 0xC0AC;
@@ -66,24 +69,11 @@ bool safeReadRect(const void* address, Rect& value) {
     }
 }
 
-int screenHeight() {
-    int height = BaseHeight;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenHeightAddress), height) || height <= 0) {
-        return BaseHeight;
-    }
-
-    return height;
-}
-
 bool isRect(const Rect& rect, const Rect& expected) {
     return rect.left == expected.left &&
         rect.top == expected.top &&
         rect.width == expected.width &&
         rect.height == expected.height;
-}
-
-int scaleValue(int value, int height) {
-    return static_cast<int>((static_cast<long long>(value) * height) / BaseHeight);
 }
 
 void callControlSetRect(char* control, const Rect& rect) {
@@ -99,7 +89,7 @@ void callControlSetRect(char* control, const Rect& rect) {
     }
 }
 
-void scaleKnownControl(char* control, int height) {
+void scaleKnownControl(char* control, const UniversalScaleState& scale) {
     Rect rect = {};
     if (!safeReadRect(control + 0x04, rect)) {
         return;
@@ -110,10 +100,10 @@ void scaleKnownControl(char* control, int height) {
             continue;
         }
 
-        rect.left = scaleValue(rect.left, height);
-        rect.top = scaleValue(rect.top, height);
-        rect.width = scaleValue(rect.width, height);
-        rect.height = scaleValue(rect.height, height);
+        rect.left = scaleUiValueFromBase(rect.left, BaseWidth, UiBaseWidth, scale);
+        rect.top = scaleUiValueFromBase(rect.top, BaseHeight, UiBaseHeight, scale);
+        rect.width = scaleUiValueFromBase(rect.width, BaseWidth, UiBaseWidth, scale);
+        rect.height = scaleUiValueFromBase(rect.height, BaseHeight, UiBaseHeight, scale);
         callControlSetRect(control, rect);
         return;
     }
@@ -122,30 +112,29 @@ void scaleKnownControl(char* control, int height) {
 }
 
 void scaleTargetControls(void* owner) {
-    if (!owner) {
-        return;
-    }
-
-    const int height = screenHeight();
-    if (height == BaseHeight) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!owner || !scale ||
+        (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
         return;
     }
 
     char* base = static_cast<char*>(owner);
     for (DWORD offset : TargetLabelControlOffsets) {
-        scaleKnownControl(base + offset, height);
+        scaleKnownControl(base + offset, *scale);
     }
 
     for (int menuIndex = 0; menuIndex < 3; ++menuIndex) {
         char* menu = base + TargetMenuBase + (TargetMenuStride * menuIndex);
         for (DWORD offset : TargetMenuControlOffsets) {
-            scaleKnownControl(menu + offset, height);
+            scaleKnownControl(menu + offset, *scale);
         }
     }
 }
 
 void correctTargetVerticalBounds(void* hud) {
-    if (!hud) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!hud || !scale ||
+        (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
         return;
     }
 
@@ -156,17 +145,13 @@ void correctTargetVerticalBounds(void* hud) {
         return;
     }
 
-    const int height = screenHeight();
-    if (height == BaseHeight) {
-        return;
-    }
-
     int clampHeight = 0;
     if (!safeReadInt(base + TargetClampHeightOffset, clampHeight)) {
         return;
     }
 
-    clampHeight += scaleValue(PauseRect.top, height) - PauseRect.top;
+    clampHeight += scaleUiValueFromBase(
+        PauseRect.top, BaseHeight, UiBaseHeight, *scale) - PauseRect.top;
     *reinterpret_cast<int*>(base + TargetClampHeightOffset) = clampHeight;
 }
 

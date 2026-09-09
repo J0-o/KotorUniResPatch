@@ -1,10 +1,10 @@
 #include "font_scale_2x.h"
+#include "../Common/ResolutionScale.h"
 
 namespace FontScale2x {
 
 namespace {
 
-constexpr float Scale = 2.0f;
 constexpr DWORD FontInfoOffset = 0x18;
 constexpr DWORD FontHeightOffset = 0x04;
 constexpr DWORD BaselineHeightOffset = 0x08;
@@ -59,9 +59,9 @@ bool rememberScaled(void* fontInfo) {
     return true;
 }
 
-void scaleFloat(char* base, DWORD offset) {
+void scaleFloat(char* base, DWORD offset, float scale) {
     float* value = reinterpret_cast<float*>(base + offset);
-    *value *= Scale;
+    *value *= scale;
 }
 
 bool hasSaneFontMetrics(char* fontInfo) {
@@ -76,7 +76,7 @@ bool hasSaneFontMetrics(char* fontInfo) {
         textureWidth > 0.0f && textureWidth < 4096.0f;
 }
 
-void scaleFontInfo(void* fontInfoPtr) {
+void scaleFontInfo(void* fontInfoPtr, const UniversalScaleState& universalScale) {
     if (!fontInfoPtr || wasScaled(fontInfoPtr)) {
         return;
     }
@@ -87,11 +87,12 @@ void scaleFontInfo(void* fontInfoPtr) {
             return;
         }
 
-        scaleFloat(fontInfo, FontHeightOffset);
-        scaleFloat(fontInfo, BaselineHeightOffset);
-        scaleFloat(fontInfo, TextureWidthOffset);
-        scaleFloat(fontInfo, SpacingROffset);
-        scaleFloat(fontInfo, SpacingBOffset);
+        const float scale = twoXScaleAdjustment(universalScale);
+        scaleFloat(fontInfo, FontHeightOffset, scale);
+        scaleFloat(fontInfo, BaselineHeightOffset, scale);
+        scaleFloat(fontInfo, TextureWidthOffset, scale);
+        scaleFloat(fontInfo, SpacingROffset, scale);
+        scaleFloat(fontInfo, SpacingBOffset, scale);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
@@ -123,22 +124,24 @@ void* fontInfoFromGuiString(void* guiStringPtr) {
 }
 
 void scaleFontBeforeTextOut(void* font) {
-    if (!font) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!font || !scale || !scale->contentScalingEnabled) {
         return;
     }
 
     DWORD fontInfo = 0;
     if (safeReadDword(static_cast<char*>(font) + FontInfoOffset, fontInfo) && fontInfo != 0) {
-        scaleFontInfo(reinterpret_cast<void*>(fontInfo));
+        scaleFontInfo(reinterpret_cast<void*>(fontInfo), *scale);
     }
 }
 
 void scaleGuiStringBeforeDraw(void* guiString) {
-    if (!guiString) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!guiString || !scale || !scale->contentScalingEnabled) {
         return;
     }
 
-    scaleFontInfo(fontInfoFromGuiString(guiString));
+    scaleFontInfo(fontInfoFromGuiString(guiString), *scale);
 }
 
 }

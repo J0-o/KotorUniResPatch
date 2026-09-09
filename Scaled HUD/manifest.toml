@@ -1,11 +1,11 @@
 [patch]
 id = "hud-scale-v1"
 name = "Scaled HUD"
-version = "1.0.36"
+version = "1.1.0"
 author = "J"
 description = "Scales and repositions HUD elements"
 
-requires = ["widescreen-resolution-unlock-v1"]
+requires = ["scaled-kotor"]
 
 conflicts = ["widescreen-ui-scale-v1", "widescreen-ui-scale"]
 

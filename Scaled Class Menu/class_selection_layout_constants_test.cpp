@@ -1,4 +1,5 @@
 #include "class_selection_layout_constants_test.h"
+#include "../Common/ResolutionScale.h"
 
 namespace ClassSelectionLayoutConstantsTest {
 
@@ -12,6 +13,8 @@ constexpr DWORD SlotStride = 0x25C;
 constexpr int SlotCount = 6;
 constexpr int BaseWidth = 800;
 constexpr int BaseHeight = 600;
+constexpr int UiBaseWidth = 640;
+constexpr int UiBaseHeight = 480;
 constexpr int BaseBoxWidth = 94;
 constexpr int BaseBoxHeight = 240;
 constexpr int BaseBoxLefts[] = {
@@ -72,23 +75,16 @@ bool isUsefulRootRect(const Rect& rect) {
         rect.height <= 8192;
 }
 
-int scaleValue(int value, int target, int source) {
-    if (target <= 0 || source <= 0) {
-        return value;
-    }
-
-    int scaled = static_cast<int>((static_cast<long long>(value) * target) / source);
-    return scaled > 1 ? scaled : 1;
-}
-
-Rect scaledSlotRect(int slotIndex, const Rect& root) {
-    const int scaledCanvasWidth = scaleValue(BaseWidth, root.height, BaseHeight);
-    const int offsetX = (root.width - scaledCanvasWidth) / 2;
-    const int width = scaleValue(BaseBoxWidth, root.height, BaseHeight);
-    const int height = scaleValue(BaseBoxHeight, root.height, BaseHeight);
+Rect scaledSlotRect(int slotIndex, const Rect& root, const UniversalScaleState& scale) {
+    const int offsetX = (root.width - scale.uiWidth) / 2;
+    const int width = scaleUiValueFromBase(
+        BaseBoxWidth, BaseWidth, UiBaseWidth, scale);
+    const int height = scaleUiValueFromBase(
+        BaseBoxHeight, BaseHeight, UiBaseHeight, scale);
 
     return {
-        offsetX + scaleValue(BaseBoxLefts[slotIndex], root.height, BaseHeight),
+        offsetX + scaleUiValueFromBase(
+            BaseBoxLefts[slotIndex], BaseWidth, UiBaseWidth, scale),
         (root.height - height) / 2,
         width,
         height,
@@ -98,6 +94,11 @@ Rect scaledSlotRect(int slotIndex, const Rect& root) {
 }
 
 void patchClassSelectionLayoutRects(void* ownerStackSlot, void* currentSlotMarker, void* baseRectStack, void* wrapperRectStack) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
+        return;
+    }
+
     DWORD ownerValue = 0;
     if (!safeReadDword(ownerStackSlot, ownerValue) || ownerValue == 0) {
         return;
@@ -125,12 +126,17 @@ void patchClassSelectionLayoutRects(void* ownerStackSlot, void* currentSlotMarke
         return;
     }
 
-    const Rect target = scaledSlotRect(slotIndex, root);
+    const Rect target = scaledSlotRect(slotIndex, root, *scale);
     writeRect(baseRectStack, target);
     writeRect(wrapperRectStack, target);
 }
 
 void patchInitialClassSelectionRects(void* ownerPtr) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
+        return;
+    }
+
     char* owner = static_cast<char*>(ownerPtr);
     if (owner == nullptr) {
         return;
@@ -155,7 +161,7 @@ void patchInitialClassSelectionRects(void* ownerPtr) {
             continue;
         }
 
-        const Rect target = scaledSlotRect(slotIndex, root);
+        const Rect target = scaledSlotRect(slotIndex, root, *scale);
         for (int rectIndex = 0; rectIndex < static_cast<int>(sizeof(SlotRectOffsets) / sizeof(SlotRectOffsets[0])); ++rectIndex) {
             writeRect(slot + SlotRectOffsets[rectIndex] + sizeof(DWORD), target);
         }

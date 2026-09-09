@@ -1,11 +1,11 @@
 [patch]
 id = "scaled-floating-target-actions-v1"
 name = "Scaled Floating Target + Actions"
-version = "1.0.5"
+version = "1.1.1"
 author = "J"
 description = "Scales and positions the selected target name, health display, and floating target action controls."
 
-requires = ["widescreen-resolution-unlock-v1"]
+requires = ["scaled-kotor"]
 
 conflicts = ["widescreen-ui-scale-v1", "widescreen-ui-scale"]
 

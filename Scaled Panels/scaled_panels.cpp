@@ -1,4 +1,5 @@
 #include "scaled_panels.h"
+#include "../Common/ResolutionScale.h"
 
 namespace ScaledPanels {
 
@@ -8,25 +9,10 @@ constexpr DWORD QuickOrCustomVtable = 0x00759710;
 constexpr DWORD QuickPanelVtable = 0x00759668;
 constexpr DWORD LevelUpPanelVtable = 0x00759568;
 constexpr DWORD CustomPanelVtable = 0x007595E0;
-constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
-constexpr int BaseWidth = 640;
-constexpr int BaseHeight = 480;
 
 bool safeReadDword(const void* address, DWORD& value) {
     __try {
         value = *reinterpret_cast<const DWORD*>(address);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        value = 0;
-        return false;
-    }
-}
-
-bool safeReadInt(const void* address, int& value) {
-    __try {
-        value = *reinterpret_cast<const int*>(address);
         return true;
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -40,53 +26,17 @@ bool hasUsefulRect(const Rect& rect) {
         rect.width < 8192 && rect.height < 8192;
 }
 
-int screenWidth() {
-    int width = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenWidthAddress), width) || width <= 0) {
-        return 800;
-    }
-
-    return width;
-}
-
-int screenHeight() {
-    int height = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenHeightAddress), height) || height <= 0) {
-        return 600;
-    }
-
-    return height;
-}
-
-int scaleValue(int value, int target, int source) {
-    if (target <= 0 || source <= 0) {
-        return value;
-    }
-
-    return static_cast<int>((static_cast<long long>(value) * target) / source);
-}
-
-int menuWidth() {
-    int width = scaleValue(BaseWidth, screenHeight(), BaseHeight);
-    if (width > screenWidth()) {
-        width = screenWidth();
-    }
-
-    return width;
-}
-
-Rect scaledChildRect(const Rect& rect) {
-    const int width = menuWidth();
+Rect scaledChildRect(const Rect& rect, const UniversalScaleState& scale) {
     return {
-        scaleValue(rect.left, width, BaseWidth),
-        scaleValue(rect.top, screenHeight(), BaseHeight),
-        scaleValue(rect.width, width, BaseWidth),
-        scaleValue(rect.height, screenHeight(), BaseHeight),
+        scaleUiValue(rect.left, scale),
+        scaleUiValue(rect.top, scale),
+        scaleUiValue(rect.width, scale),
+        scaleUiValue(rect.height, scale),
     };
 }
 
-Rect scaledRootRect(const Rect& rect) {
-    return scaledChildRect(rect);
+Rect scaledRootRect(const Rect& rect, const UniversalScaleState& scale) {
+    return scaledChildRect(rect, scale);
 }
 
 void callControlSetRect(char* control, const Rect& rect) {
@@ -113,18 +63,18 @@ void callControlSetRect(char* control, const Rect& rect) {
     }
 }
 
-void scaleControl(char* control) {
+void scaleControl(char* control, const UniversalScaleState& scale) {
     if (!control) {
         return;
     }
 
     Rect* rect = reinterpret_cast<Rect*>(control + sizeof(DWORD));
     if (hasUsefulRect(*rect)) {
-        callControlSetRect(control, scaledChildRect(*rect));
+        callControlSetRect(control, scaledChildRect(*rect, scale));
     }
 }
 
-void scalePanelControls(char* panel) {
+void scalePanelControls(char* panel, const UniversalScaleState& scale) {
     DWORD childrenData = 0;
     DWORD childrenSize = 0;
     if (!safeReadDword(panel + 0x20, childrenData) ||
@@ -138,14 +88,15 @@ void scalePanelControls(char* panel) {
         DWORD child = 0;
         if (safeReadDword(reinterpret_cast<const void*>(childrenData + (i * sizeof(DWORD))), child) &&
             child != 0) {
-            scaleControl(reinterpret_cast<char*>(child));
+            scaleControl(reinterpret_cast<char*>(child), scale);
         }
     }
 }
 
 void scaleSmallRootPanel(void* ownerPtr, DWORD expectedVtable) {
     char* owner = static_cast<char*>(ownerPtr);
-    if (!owner || (screenWidth() == 800 && screenHeight() == 600)) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!owner || !scale || isIdentityUiScale(*scale)) {
         return;
     }
 
@@ -159,8 +110,8 @@ void scaleSmallRootPanel(void* ownerPtr, DWORD expectedVtable) {
         return;
     }
 
-    scalePanelControls(owner);
-    callControlSetRect(owner, scaledRootRect(*root));
+    scalePanelControls(owner, *scale);
+    callControlSetRect(owner, scaledRootRect(*root, *scale));
 }
 
 }

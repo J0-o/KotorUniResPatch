@@ -1,0 +1,1 @@
+# This is a DLL-only provider. KPM loads the module without installing hooks.

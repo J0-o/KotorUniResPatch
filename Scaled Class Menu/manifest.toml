@@ -1,11 +1,11 @@
 [patch]
 id = "class-selection-layout-constants-test-v1"
 name = "Scaled Class Menu"
-version = "1.0.1"
+version = "1.2.0"
 author = "J"
 description = "Scale class selection menu."
 
-requires = ["menu-scale-v1"]
+requires = ["menu-scale-v1", "scaled-kotor"]
 
 conflicts = ["class-selection-box-test-v1"]
 

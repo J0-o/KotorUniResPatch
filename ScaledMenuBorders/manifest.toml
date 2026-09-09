@@ -1,9 +1,11 @@
 [patch]
 id = "scaled-menu-borders"
 name = "Scaled Menu Borders"
-version = "1.0.1"
+version = "1.1.0"
 author = "J"
 description = "Dynamically adjusts menu borders to fit most resolutions."
+
+requires = ["scaled-kotor"]
 
 [patch.supported_versions]
 kotor1_gog_103 = "9C10E0450A6EECA417E036E3CDE7474FED1F0A92AAB018446D156944DEA91435"

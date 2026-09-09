@@ -1,4 +1,5 @@
 #include "scaled_hud.h"
+#include "../Common/ResolutionScale.h"
 
 namespace HudScale {
 
@@ -18,8 +19,8 @@ struct OffsetRect {
 
 constexpr int BaseWidth = 800;
 constexpr int BaseHeight = 600;
-constexpr DWORD ScreenWidthAddress = 0x0078D1D4;
-constexpr DWORD ScreenHeightAddress = 0x0078D1D8;
+constexpr int UiBaseWidth = 640;
+constexpr int UiBaseHeight = 480;
 
 constexpr DWORD MinimapOffsets[] = {
     0x5CC0, // map_border_label
@@ -138,31 +139,16 @@ bool safeReadRect(const void* address, Rect& value) {
     }
 }
 
-int screenWidth() {
-    int width = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenWidthAddress), width) || width <= 0) {
-        return BaseWidth;
-    }
-
-    return width;
+int scaleX(int value, const UniversalScaleState& scale) {
+    return scaleUiValueFromBase(value, BaseWidth, UiBaseWidth, scale);
 }
 
-int screenHeight() {
-    int height = 0;
-    if (!safeReadInt(reinterpret_cast<const void*>(ScreenHeightAddress), height) || height <= 0) {
-        return BaseHeight;
-    }
-
-    return height;
+int scaleY(int value, const UniversalScaleState& scale) {
+    return scaleUiValueFromBase(value, BaseHeight, UiBaseHeight, scale);
 }
 
-int hudScale() {
-    const int roundedScale = (screenHeight() + (BaseHeight / 2)) / BaseHeight;
-    return roundedScale > 1 ? roundedScale : 1;
-}
-
-int hudCanvasLeft(int scale) {
-    const int offset = (screenWidth() - (BaseWidth * scale)) / 2;
+int hudCanvasLeft(const UniversalScaleState& scale) {
+    const int offset = (scale.screenWidth - scale.uiWidth) / 2;
     return offset > 0 ? offset : 0;
 }
 
@@ -241,53 +227,53 @@ void callControlSetRect(char* control, const Rect& rect) {
     writeMemory(control + 0x04, &rect, sizeof(rect));
 }
 
-Rect scaleRect(const Rect& original, int scale) {
+Rect scaleRect(const Rect& original, const UniversalScaleState& scale) {
     Rect scaled = {
-        original.left * scale,
-        original.top * scale,
-        original.width * scale,
-        original.height * scale
+        scaleX(original.left, scale),
+        scaleY(original.top, scale),
+        scaleX(original.width, scale),
+        scaleY(original.height, scale)
     };
 
     if (original.left >= BaseWidth / 2) {
         const int rightGap = BaseWidth - (original.left + original.width);
-        scaled.left = screenWidth() - (rightGap * scale) - scaled.width;
+        scaled.left = scale.screenWidth - scaleX(rightGap, scale) - scaled.width;
     }
 
     if (original.top >= BaseHeight / 2) {
         const int bottomGap = BaseHeight - (original.top + original.height);
-        scaled.top = screenHeight() - (bottomGap * scale) - scaled.height;
+        scaled.top = scale.screenHeight - scaleY(bottomGap, scale) - scaled.height;
     }
 
     return scaled;
 }
 
-Rect scaleQueuedActionMarkerRect(const Rect& original, int scale) {
+Rect scaleQueuedActionMarkerRect(const Rect& original, const UniversalScaleState& scale) {
     Rect scaled = {
-        hudCanvasLeft(scale) + (original.left * scale),
-        original.top * scale,
-        original.width * scale,
-        original.height * scale
+        hudCanvasLeft(scale) + scaleX(original.left, scale),
+        scaleY(original.top, scale),
+        scaleX(original.width, scale),
+        scaleY(original.height, scale)
     };
 
     if (original.top >= BaseHeight / 2) {
         const int bottomGap = BaseHeight - (original.top + original.height);
-        scaled.top = screenHeight() - (bottomGap * scale) - scaled.height;
+        scaled.top = scale.screenHeight - scaleY(bottomGap, scale) - scaled.height;
     }
 
     return scaled;
 }
 
-int scaleCoordinate(int value, int base, int target, int scale) {
-    int scaled = value * scale;
-    if (value >= base / 2) {
-        scaled = target - ((base - value) * scale);
+int scaleVerticalCoordinate(int value, const UniversalScaleState& scale) {
+    int scaled = scaleY(value, scale);
+    if (value >= BaseHeight / 2) {
+        scaled = scale.screenHeight - scaleY(BaseHeight - value, scale);
     }
 
     return scaled;
 }
 
-void scaleControl(char* base, DWORD offset, int scale) {
+void scaleControl(char* base, DWORD offset, const UniversalScaleState& scale) {
     if (!base || isMinimapControl(offset)) {
         return;
     }
@@ -301,7 +287,7 @@ void scaleControl(char* base, DWORD offset, int scale) {
     callControlSetRect(control, scaleRect(original, scale));
 }
 
-void scaleVolatileControl(char* base, DWORD offset, int scale) {
+void scaleVolatileControl(char* base, DWORD offset, const UniversalScaleState& scale) {
     if (!base) {
         return;
     }
@@ -314,25 +300,25 @@ void scaleVolatileControl(char* base, DWORD offset, int scale) {
 
     Rect scaled = original;
     if (original.left >= 0 && original.left + original.width <= BaseWidth) {
-        scaled.left = original.left * scale;
-        scaled.width = original.width * scale;
+        scaled.left = scaleX(original.left, scale);
+        scaled.width = scaleX(original.width, scale);
         if (original.left >= BaseWidth / 2) {
             const int rightGap = BaseWidth - (original.left + original.width);
-            scaled.left = screenWidth() - (rightGap * scale) - scaled.width;
+            scaled.left = scale.screenWidth - scaleX(rightGap, scale) - scaled.width;
         }
     }
 
     if (original.top >= 0 && original.top + original.height <= BaseHeight) {
-        scaled.top = original.top * scale;
-        scaled.height = original.height * scale;
+        scaled.top = scaleY(original.top, scale);
+        scaled.height = scaleY(original.height, scale);
         if (original.top >= BaseHeight / 2) {
             const int bottomGap = BaseHeight - (original.top + original.height);
-            scaled.top = screenHeight() - (bottomGap * scale) - scaled.height;
+            scaled.top = scale.screenHeight - scaleY(bottomGap, scale) - scaled.height;
         }
     }
     else if (original.top > BaseHeight && original.height <= BaseHeight / 4) {
         const int bottom = original.top + original.height;
-        scaled.height = original.height * scale;
+        scaled.height = scaleY(original.height, scale);
         scaled.top = bottom - scaled.height;
     }
 
@@ -344,7 +330,7 @@ void scaleVolatileControl(char* base, DWORD offset, int scale) {
     }
 }
 
-void scaleActionDescriptionBottom(char* base, int scale) {
+void scaleActionDescriptionBottom(char* base, const UniversalScaleState& scale) {
     if (!base) {
         return;
     }
@@ -356,20 +342,21 @@ void scaleActionDescriptionBottom(char* base, int scale) {
         return;
     }
 
-    const int scaled = scaleCoordinate(bottom, BaseHeight, screenHeight(), scale);
+    const int scaled = scaleVerticalCoordinate(bottom, scale);
     if (scaled != bottom) {
         safeWriteInt(base + ActionDescriptionBottomOffset, scaled);
     }
 }
 
-void scaleActionDescriptionControls(char* base, int scale) {
+void scaleActionDescriptionControls(char* base, const UniversalScaleState& scale) {
     scaleActionDescriptionBottom(base, scale);
     for (DWORD offset : ActionDescriptionControlOffsets) {
         scaleVolatileControl(base, offset, scale);
     }
 }
 
-void scaleQueuedActionMarkerControl(char* control, int scale, bool useVirtualSetRect) {
+void scaleQueuedActionMarkerControl(char* control, const UniversalScaleState& scale,
+                                    bool useVirtualSetRect) {
     if (!control) {
         return;
     }
@@ -388,7 +375,7 @@ void scaleQueuedActionMarkerControl(char* control, int scale, bool useVirtualSet
     }
 }
 
-void scaleQueuedActionMarkers(char* base, int scale) {
+void scaleQueuedActionMarkers(char* base, const UniversalScaleState& scale) {
     if (!base) {
         return;
     }
@@ -406,7 +393,7 @@ void scaleQueuedActionMarkers(char* base, int scale) {
     }
 }
 
-void scaleCenteredHudControls(char* base, int scale) {
+void scaleCenteredHudControls(char* base, const UniversalScaleState& scale) {
     if (!base) {
         return;
     }
@@ -424,13 +411,13 @@ void scaleCenteredHudControls(char* base, int scale) {
     }
 }
 
-void scaleActionMenu(char* base, DWORD offset, int scale) {
+void scaleActionMenu(char* base, DWORD offset, const UniversalScaleState& scale) {
     for (DWORD childOffset : ActionMenuControlOffsets) {
         scaleControl(base, offset + childOffset, scale);
     }
 }
 
-void scaleActionQueue(char* base, int scale) {
+void scaleActionQueue(char* base, const UniversalScaleState& scale) {
     constexpr DWORD ActionQueueBase = 0x772C;
     constexpr DWORD ActionQueueStride = 0x71C;
     for (int i = 0; i < 6; ++i) {
@@ -438,58 +425,53 @@ void scaleActionQueue(char* base, int scale) {
     }
 }
 
-void scaleCharacter(char* base, DWORD offset, int scale) {
+void scaleCharacter(char* base, DWORD offset, const UniversalScaleState& scale) {
     for (DWORD childOffset : CharacterControlOffsets) {
         scaleControl(base, offset + childOffset, scale);
     }
 }
 
-void scaleStatusSummaries(char* base, int scale) {
+void scaleStatusSummaries(char* base, const UniversalScaleState& scale) {
     if (!base) {
         return;
     }
 
     for (const OffsetRect& summary : StatusSummaryRects) {
         const Rect scaled = {
-            summary.rect.left * scale,
-            summary.rect.top * scale,
-            summary.rect.width * scale,
-            summary.rect.height * scale
+            scaleX(summary.rect.left, scale),
+            scaleY(summary.rect.top, scale),
+            scaleX(summary.rect.width, scale),
+            scaleY(summary.rect.height, scale)
         };
         callControlSetRect(base + StatusSummaryBase + summary.offset, scaled);
     }
 }
 
-void scaleRootPanel(char* base) {
-    Rect root = { 0, 0, screenWidth(), screenHeight() };
+void scaleRootPanel(char* base, const UniversalScaleState& scale) {
+    Rect root = { 0, 0, scale.screenWidth, scale.screenHeight };
     callControlSetRect(base, root);
 }
 
-void scaleAreaTransitionOwner(char* owner, int scale) {
+void scaleAreaTransitionOwner(char* owner, const UniversalScaleState& scale) {
     if (!owner) {
         return;
     }
 
     for (const OffsetRect& control : AreaTransitionControlRects) {
         const Rect scaled = {
-            control.rect.left * scale,
-            control.rect.top * scale,
-            control.rect.width * scale,
-            control.rect.height * scale
+            scaleX(control.rect.left, scale),
+            scaleY(control.rect.top, scale),
+            scaleX(control.rect.width, scale),
+            scaleY(control.rect.height, scale)
         };
         callControlSetRect(owner + control.offset, scaled);
     }
 
-    int transitionCanvasWidth = (screenHeight() * 4) / 3;
-    if (transitionCanvasWidth > screenWidth()) {
-        transitionCanvasWidth = screenWidth();
-    }
-
     const Rect scaledOwner = {
-        (transitionCanvasWidth - (AreaTransitionOwnerRect.width * scale)) / 2,
-        AreaTransitionOwnerRect.top * scale,
-        AreaTransitionOwnerRect.width * scale,
-        AreaTransitionOwnerRect.height * scale
+        (scale.uiWidth - scaleX(AreaTransitionOwnerRect.width, scale)) / 2,
+        scaleY(AreaTransitionOwnerRect.top, scale),
+        scaleX(AreaTransitionOwnerRect.width, scale),
+        scaleY(AreaTransitionOwnerRect.height, scale)
     };
     writeMemory(owner + 0x04, &scaledOwner, sizeof(scaledOwner));
 }
@@ -497,49 +479,54 @@ void scaleAreaTransitionOwner(char* owner, int scale) {
 }
 
 void scaleHudControls(void* hud) {
-    if (!hud || (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!hud || !scale ||
+        (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
         return;
     }
 
-    const int scale = hudScale();
     char* base = static_cast<char*>(hud);
 
-    scaleActionDescriptionBottom(base, scale);
+    scaleActionDescriptionBottom(base, *scale);
 
-    scaleRootPanel(base);
+    scaleRootPanel(base, *scale);
 
-    scaleActionQueue(base, scale);
-    scaleQueuedActionMarkers(base, scale);
-    scaleCenteredHudControls(base, scale);
+    scaleActionQueue(base, *scale);
+    scaleQueuedActionMarkers(base, *scale);
+    scaleCenteredHudControls(base, *scale);
 
     for (DWORD offset : HudControlOffsets) {
-        scaleControl(base, offset, scale);
+        scaleControl(base, offset, *scale);
     }
 
     constexpr DWORD PartyBase = 0x1F88;
     constexpr DWORD PartyStride = 0xEA8;
     for (int i = 0; i < 3; ++i) {
-        scaleCharacter(base, PartyBase + (PartyStride * i), scale);
+        scaleCharacter(base, PartyBase + (PartyStride * i), *scale);
     }
-    scaleCharacter(base, 0x4B80, scale); // main_character
+    scaleCharacter(base, 0x4B80, *scale); // main_character
 
-    scaleStatusSummaries(base, scale);
+    scaleStatusSummaries(base, *scale);
 }
 
 void scaleHudActionDescription(void* hud) {
-    if (!hud || (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!hud || !scale ||
+        (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
         return;
     }
 
-    scaleActionDescriptionControls(static_cast<char*>(hud), hudScale());
+    scaleActionDescriptionControls(static_cast<char*>(hud), *scale);
 }
 
 void scaleAreaTransitionPrompt(void* prompt) {
-    if (!prompt || (screenWidth() == BaseWidth && screenHeight() == BaseHeight)) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!prompt || !scale ||
+        (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
         return;
     }
 
-    scaleAreaTransitionOwner(static_cast<char*>(prompt), hudScale());
+    scaleAreaTransitionOwner(static_cast<char*>(prompt), *scale);
 }
 
 }

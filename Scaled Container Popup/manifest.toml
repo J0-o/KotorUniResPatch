@@ -1,11 +1,11 @@
 [patch]
 id = "container-popup-scale-test-v1"
 name = "Scaled Container Popup"
-version = "1.0.5"
+version = "1.3.2"
 author = "J"
-description = "Scales container/loot popup and it's buttons."
+description = "Scales the container/loot popup and its buttons with the configurable content factor."
 
-requires = []
+requires = ["scaled-kotor"]
 
 conflicts = ["widescreen-ui-scale-v1", "widescreen-ui-scale"]
 

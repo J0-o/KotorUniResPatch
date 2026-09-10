@@ -15,8 +15,13 @@ constexpr DWORD GuiStringFontTextureOffset = 0x18;
 constexpr DWORD SafePointerGetFontInfoVtableOffset = 0x38;
 constexpr int MaxTrackedFontInfos = 64;
 
-void* g_scaledFontInfos[MaxTrackedFontInfos] = {};
-int g_scaledFontInfoCount = 0;
+struct TrackedFontInfo {
+    void* object;
+    float metrics[5];
+};
+
+TrackedFontInfo g_trackedFontInfos[MaxTrackedFontInfos] = {};
+int g_trackedFontInfoCount = 0;
 
 bool safeReadDword(const void* address, DWORD& value) {
     __try {
@@ -40,28 +45,31 @@ bool safeReadFloat(const void* address, float& value) {
     }
 }
 
-bool wasScaled(void* fontInfo) {
-    for (int i = 0; i < g_scaledFontInfoCount; ++i) {
-        if (g_scaledFontInfos[i] == fontInfo) {
-            return true;
+TrackedFontInfo* findTracked(void* fontInfo) {
+    for (int i = 0; i < g_trackedFontInfoCount; ++i) {
+        if (g_trackedFontInfos[i].object == fontInfo) {
+            return &g_trackedFontInfos[i];
         }
     }
 
-    return false;
+    return nullptr;
 }
 
-bool rememberScaled(void* fontInfo) {
-    if (g_scaledFontInfoCount >= MaxTrackedFontInfos) {
-        return false;
+TrackedFontInfo* rememberBaseMetrics(char* fontInfo) {
+    if (g_trackedFontInfoCount >= MaxTrackedFontInfos) {
+        return nullptr;
     }
 
-    g_scaledFontInfos[g_scaledFontInfoCount++] = fontInfo;
-    return true;
-}
-
-void scaleFloat(char* base, DWORD offset, float scale) {
-    float* value = reinterpret_cast<float*>(base + offset);
-    *value *= scale;
+    TrackedFontInfo& tracked = g_trackedFontInfos[g_trackedFontInfoCount++];
+    tracked.object = fontInfo;
+    const DWORD offsets[] = {
+        FontHeightOffset, BaselineHeightOffset, TextureWidthOffset,
+        SpacingROffset, SpacingBOffset,
+    };
+    for (int i = 0; i < 5; ++i) {
+        tracked.metrics[i] = *reinterpret_cast<float*>(fontInfo + offsets[i]);
+    }
+    return &tracked;
 }
 
 bool hasSaneFontMetrics(char* fontInfo) {
@@ -77,22 +85,29 @@ bool hasSaneFontMetrics(char* fontInfo) {
 }
 
 void scaleFontInfo(void* fontInfoPtr, const UniversalScaleState& universalScale) {
-    if (!fontInfoPtr || wasScaled(fontInfoPtr)) {
+    if (!fontInfoPtr) {
         return;
     }
 
     __try {
         char* fontInfo = static_cast<char*>(fontInfoPtr);
-        if (!hasSaneFontMetrics(fontInfo) || !rememberScaled(fontInfoPtr)) {
+        TrackedFontInfo* tracked = findTracked(fontInfoPtr);
+        if (!tracked && hasSaneFontMetrics(fontInfo)) {
+            tracked = rememberBaseMetrics(fontInfo);
+        }
+        if (!tracked) {
             return;
         }
 
         const float scale = twoXScaleAdjustment(universalScale);
-        scaleFloat(fontInfo, FontHeightOffset, scale);
-        scaleFloat(fontInfo, BaselineHeightOffset, scale);
-        scaleFloat(fontInfo, TextureWidthOffset, scale);
-        scaleFloat(fontInfo, SpacingROffset, scale);
-        scaleFloat(fontInfo, SpacingBOffset, scale);
+        const DWORD offsets[] = {
+            FontHeightOffset, BaselineHeightOffset, TextureWidthOffset,
+            SpacingROffset, SpacingBOffset,
+        };
+        for (int i = 0; i < 5; ++i) {
+            *reinterpret_cast<float*>(fontInfo + offsets[i]) =
+                tracked->metrics[i] * scale;
+        }
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
@@ -125,7 +140,7 @@ void* fontInfoFromGuiString(void* guiStringPtr) {
 
 void scaleFontBeforeTextOut(void* font) {
     const UniversalScaleState* scale = ResolutionScale::get();
-    if (!font || !scale || !scale->contentScalingEnabled) {
+    if (!font || !scale) {
         return;
     }
 
@@ -137,11 +152,22 @@ void scaleFontBeforeTextOut(void* font) {
 
 void scaleGuiStringBeforeDraw(void* guiString) {
     const UniversalScaleState* scale = ResolutionScale::get();
-    if (!guiString || !scale || !scale->contentScalingEnabled) {
+    if (!guiString || !scale) {
         return;
     }
 
     scaleFontInfo(fontInfoFromGuiString(guiString), *scale);
+}
+
+void refreshResolutionDependentUi() {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale) {
+        return;
+    }
+
+    for (int i = 0; i < g_trackedFontInfoCount; ++i) {
+        scaleFontInfo(g_trackedFontInfos[i].object, *scale);
+    }
 }
 
 }

@@ -14,7 +14,12 @@ struct UniversalScaleState {
     int contentScaleDenominator;
     // The provider owns the resolution guard. Consumers only honor this flag.
     int contentScalingEnabled;
+    // Increments whenever the provider observes a different screen size.
+    // Consumers can use this to reapply base-derived layout exactly once.
+    unsigned int layoutGeneration;
 };
+
+typedef void(__cdecl *ResolutionRefreshCallback)();
 
 inline int scaleUiValue(int value, const UniversalScaleState& scale) {
     if (scale.scaleNumerator <= 0 || scale.scaleDenominator <= 0) {
@@ -95,3 +100,8 @@ inline bool isIdentityContentScale(const UniversalScaleState& scale) {
 }
 
 extern "C" const UniversalScaleState* __cdecl getUniversalScaleState();
+extern "C" void __cdecl onResolutionModeCommitted(void* guiInGame);
+extern "C" int __cdecl registerResolutionRefreshCallback(
+    ResolutionRefreshCallback callback);
+extern "C" void __cdecl unregisterResolutionRefreshCallback(
+    ResolutionRefreshCallback callback);

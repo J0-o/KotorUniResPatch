@@ -16,6 +16,8 @@ constexpr DWORD PazaakOpponentHandBase = 0x564C;
 constexpr DWORD PazaakCardStride = 0x31C;
 constexpr DWORD PazaakCardLabelOffset = 0x1C4;
 constexpr DWORD PazaakCardFaceDrawModeOffset = 0x9C;
+constexpr int MaxTrackedPanels = 64;
+constexpr int MaxSnapshotChildren = 256;
 
 struct ScaleState {
     int baseWidth;
@@ -31,6 +33,23 @@ struct PazaakCardRect {
     Rect button;
     Rect label;
 };
+
+struct ControlSnapshot {
+    char* control;
+    Rect rect;
+};
+
+struct PanelSnapshot {
+    char* panel;
+    DWORD vtable;
+    Rect root;
+    ControlSnapshot children[MaxSnapshotChildren];
+    DWORD childCount;
+    bool valid;
+};
+
+PanelSnapshot trackedPanels[MaxTrackedPanels] = {};
+void* livePazaakGame = nullptr;
 
 constexpr PazaakCardRect PazaakHandCards[] = {
     { PazaakPlayerHandBase + (PazaakCardStride * 0), { 94, 425, 80, 80 }, { 109, 433, 50, 50 } },
@@ -231,6 +250,107 @@ void scalePanelBorder(char* panel, const Rect& scaledPanelRect) {
     callControlSetRect(reinterpret_cast<char*>(border), borderRect);
 }
 
+bool makeScaleForPanel(void* panel, const Rect& original,
+                       const UniversalScaleState& universalScale,
+                       ScaleState& scale) {
+    if (isMainMenuPanel(panel) && original.left == 0 && original.top == 0 &&
+        original.width == BaseWidth && original.height == BaseHeight) {
+        scale = makeFullscreenMenuScale(
+            original.width, original.height, universalScale);
+        return true;
+    }
+    if (isTopTabRoot(original)) {
+        scale = makeMenuScale(640, 480, universalScale);
+        return true;
+    }
+    if (isFourByThreeRoot(original)) {
+        scale = makeMenuScale(original.width, original.height, universalScale);
+        return true;
+    }
+    return false;
+}
+
+PanelSnapshot* capturePanel(char* panel, DWORD vtable, const Rect& root) {
+    PanelSnapshot* snapshot = nullptr;
+    for (PanelSnapshot& candidate : trackedPanels) {
+        if (candidate.valid && candidate.panel == panel) {
+            snapshot = &candidate;
+            break;
+        }
+        if (!snapshot && !candidate.valid) {
+            snapshot = &candidate;
+        }
+    }
+    if (!snapshot) {
+        return nullptr;
+    }
+
+    *snapshot = {};
+    snapshot->panel = panel;
+    snapshot->vtable = vtable;
+    snapshot->root = root;
+    snapshot->valid = true;
+
+    DWORD childrenData = 0;
+    DWORD childrenSize = 0;
+    if (!safeReadDword(panel + 0x20, childrenData) ||
+        !safeReadDword(panel + 0x24, childrenSize) ||
+        childrenSize > MaxSnapshotChildren) {
+        return snapshot;
+    }
+    for (DWORD i = 0; i < childrenSize; ++i) {
+        DWORD childValue = 0;
+        if (!safeReadDword(reinterpret_cast<void*>(childrenData + i * sizeof(DWORD)),
+                           childValue) || childValue == 0) {
+            continue;
+        }
+        char* child = reinterpret_cast<char*>(childValue);
+        __try {
+            Rect childRect = *reinterpret_cast<Rect*>(child + 0x04);
+            if (hasUsefulRect(childRect)) {
+                snapshot->children[snapshot->childCount++] = { child, childRect };
+            }
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+        }
+    }
+    return snapshot;
+}
+
+void applyPanelSnapshot(PanelSnapshot& snapshot,
+                        const UniversalScaleState& universalScale) {
+    if (!snapshot.valid) {
+        return;
+    }
+    DWORD vtable = 0;
+    if (!safeReadDword(snapshot.panel, vtable) || vtable != snapshot.vtable) {
+        snapshot = {};
+        return;
+    }
+
+    if (vtable == FadePanelVtable) {
+        const Rect fullscreen = {
+            0, 0, universalScale.screenWidth, universalScale.screenHeight,
+        };
+        callControlSetRect(snapshot.panel, fullscreen);
+        return;
+    }
+
+    ScaleState scale = {};
+    if (!makeScaleForPanel(snapshot.panel, snapshot.root,
+                           universalScale, scale)) {
+        return;
+    }
+    patchCenteringConstants(scale.targetWidth, scale.targetHeight);
+    const Rect scaledRoot = scaledRect(snapshot.root, scale);
+    callControlSetRect(snapshot.panel, scaledRoot);
+    scalePanelBorder(snapshot.panel, scaledRoot);
+    for (DWORD i = 0; i < snapshot.childCount; ++i) {
+        callControlSetRect(snapshot.children[i].control,
+            scaledRect(snapshot.children[i].rect, scale));
+    }
+}
+
 }
 
 void scaleMenuPanelTree(void* panel) {
@@ -242,7 +362,10 @@ void scaleMenuPanelTree(void* panel) {
     }
 
     DWORD vtable = 0;
-    if (safeReadDword(panel, vtable) && vtable == TooltipPanelVtable) {
+    if (!safeReadDword(panel, vtable)) {
+        return;
+    }
+    if (vtable == TooltipPanelVtable) {
         // This is a hidden coordinate canvas, not a visible menu panel.
         // Scaling its single label tiles icon-only tooltips across the extent.
         return;
@@ -253,55 +376,46 @@ void scaleMenuPanelTree(void* panel) {
         return;
     }
 
-    if (isFadePanel(panel)) {
-        const Rect fullscreen = {
-            0, 0, universalScale->screenWidth, universalScale->screenHeight
-        };
-        callControlSetRect(static_cast<char*>(panel), fullscreen);
-        return;
-    }
-
-    ScaleState scale = {};
     const Rect original = *rect;
-    if (isMainMenuPanel(panel) &&
-        original.left == 0 &&
-        original.top == 0 &&
-        original.width == BaseWidth &&
-        original.height == BaseHeight) {
-        scale = makeFullscreenMenuScale(
-            original.width, original.height, *universalScale);
-    }
-    else if (isTopTabRoot(original)) {
-        scale = makeMenuScale(640, 480, *universalScale);
-    }
-    else if (isFourByThreeRoot(original)) {
-        scale = makeMenuScale(original.width, original.height, *universalScale);
-    }
-    else {
+    ScaleState ignored = {};
+    if (!isFadePanel(panel) &&
+        !makeScaleForPanel(panel, original, *universalScale, ignored)) {
         return;
     }
-
-    patchCenteringConstants(scale.targetWidth, scale.targetHeight);
-
-    const Rect scaled = scaledRect(*rect, scale);
-    callControlSetRect(static_cast<char*>(panel), scaled);
-    scalePanelBorder(static_cast<char*>(panel), scaled);
-    scalePanelControls(static_cast<char*>(panel), scale);
+    PanelSnapshot* snapshot = capturePanel(
+        static_cast<char*>(panel), vtable, original);
+    if (snapshot) {
+        applyPanelSnapshot(*snapshot, *universalScale);
+    }
 }
 
 void scalePazaakGameCards(void* pazaakGame) {
     const UniversalScaleState* universalScale = ResolutionScale::get();
-    if (!pazaakGame || !universalScale ||
-        (universalScale->uiWidth == BaseWidth &&
-         universalScale->uiHeight == BaseHeight)) {
+    if (!pazaakGame || !universalScale) {
         return;
     }
+
+    livePazaakGame = pazaakGame;
 
     const ScaleState scale = makeMenuScale(
         BaseWidth, BaseHeight, *universalScale);
     char* base = static_cast<char*>(pazaakGame);
     for (const PazaakCardRect& card : PazaakHandCards) {
         setPazaakCardRect(base, card, scale);
+    }
+}
+
+void refreshMenuPanelTrees() {
+    const UniversalScaleState* universalScale = ResolutionScale::get();
+    if (!universalScale) {
+        return;
+    }
+    patchCenteringConstants(universalScale->uiWidth, universalScale->uiHeight);
+    for (PanelSnapshot& panel : trackedPanels) {
+        applyPanelSnapshot(panel, *universalScale);
+    }
+    if (livePazaakGame) {
+        scalePazaakGameCards(livePazaakGame);
     }
 }
 

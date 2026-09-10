@@ -66,6 +66,15 @@ const UniversalScaleState* getScale() {
     return ResolutionScale::get();
 }
 
+void __cdecl refreshPatchedListConstants() {
+    const UniversalScaleState* scale = getScale();
+    if (!scale) {
+        return;
+    }
+    patchItemVisualConstants(*scale);
+    writeInt(SkillVisualHeightAddress, adjustedValue(0x2A, *scale));
+}
+
 }
 
 extern "C" void __cdecl setInventoryItemRowHeight(void* heightSlot) {
@@ -138,9 +147,18 @@ extern "C" void __cdecl setGenericListRowHeight(void* sourceRect,
     }
 }
 
+extern "C" void __cdecl refreshResolutionDependentUi() {
+    refreshPatchedListConstants();
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     UNREFERENCED_PARAMETER(instance);
-    UNREFERENCED_PARAMETER(reason);
     UNREFERENCED_PARAMETER(reserved);
+    if (reason == DLL_PROCESS_ATTACH) {
+        ResolutionScale::subscribe(refreshResolutionDependentUi);
+    }
+    else if (reason == DLL_PROCESS_DETACH) {
+        ResolutionScale::unsubscribe(refreshResolutionDependentUi);
+    }
     return TRUE;
 }

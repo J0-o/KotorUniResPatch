@@ -1,1 +1,16 @@
-# This is a DLL-only provider. KPM loads the module without installing hooks.
+# The native display-mode setter reaches this instruction after updating the
+# renderer and after its partial UI refresh at 0x0062F5F0. The callback publishes
+# the new shared scale generation, applies 2x font metrics, asks the GUI manager
+# to rebuild control font layout, then refreshes the remaining scaled layouts and
+# persistent screen owners. It deliberately does not reconstruct the active
+# resolution/options objects or invoke the native partial refresh twice.
+[[hooks]]
+address = 0x005F1A70
+type = "detour"
+function = "onResolutionModeCommitted"
+original_bytes = [0x8B, 0x8C, 0x24, 0xC4, 0x00, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ebx"
+type = "pointer"

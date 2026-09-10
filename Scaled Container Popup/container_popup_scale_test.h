@@ -12,5 +12,6 @@ struct Rect {
 };
 
 void scaleContainerPanel(void* owner);
+void refreshContainerPanel();
 
 }

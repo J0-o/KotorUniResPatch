@@ -5,3 +5,4 @@ EXPORTS
     setFeatGroupRowHeight
     setFeatStoredExtent
     setGenericListRowHeight
+    refreshResolutionDependentUi

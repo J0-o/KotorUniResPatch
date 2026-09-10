@@ -33,6 +33,7 @@ constexpr DWORD SlotRectOffsets[] = {
     0x1C4,
     0x220,
 };
+void* liveClassSelectionOwner = nullptr;
 
 bool safeReadDword(const void* address, DWORD& value) {
     __try {
@@ -133,7 +134,7 @@ void patchClassSelectionLayoutRects(void* ownerStackSlot, void* currentSlotMarke
 
 void patchInitialClassSelectionRects(void* ownerPtr) {
     const UniversalScaleState* scale = ResolutionScale::get();
-    if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
+    if (!scale) {
         return;
     }
 
@@ -146,6 +147,7 @@ void patchInitialClassSelectionRects(void* ownerPtr) {
     if (!safeReadDword(owner, ownerVtable) || ownerVtable != ClassSelectionOwnerVtable) {
         return;
     }
+    liveClassSelectionOwner = owner;
 
     Rect root = {};
     if (!safeReadRect(owner + sizeof(DWORD), root) || !isUsefulRootRect(root)) {
@@ -166,6 +168,10 @@ void patchInitialClassSelectionRects(void* ownerPtr) {
             writeRect(slot + SlotRectOffsets[rectIndex] + sizeof(DWORD), target);
         }
     }
+}
+
+void refreshClassSelectionRects() {
+    patchInitialClassSelectionRects(liveClassSelectionOwner);
 }
 
 }

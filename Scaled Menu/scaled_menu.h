@@ -13,5 +13,6 @@ struct Rect {
 
 void scaleMenuPanelTree(void* panel);
 void scalePazaakGameCards(void* pazaakGame);
+void refreshMenuPanelTrees();
 
 }

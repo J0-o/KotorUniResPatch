@@ -1,7 +1,7 @@
 [patch]
 id = "scaled-popups"
 name = "Scaled Popups"
-version = "0.5.1"
+version = "0.8.0"
 author = "J"
 description = "Scales popup dialogs with the configurable Scaled Kotor content factor."
 

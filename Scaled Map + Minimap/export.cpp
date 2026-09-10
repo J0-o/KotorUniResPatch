@@ -1,5 +1,6 @@
 #include "scaled_map.h"
 #include "scaled_minimap.h"
+#include "../Common/ResolutionScale.h"
 
 extern "C" void __cdecl prepareMenuMapScale(void* map) {
     __try {
@@ -81,9 +82,22 @@ extern "C" void __cdecl endHudMinimapGridZoom(void* hud) {
     }
 }
 
+extern "C" void __cdecl refreshResolutionDependentUi() {
+    __try {
+        WidescreenUiScale::refreshResolutionState();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     UNREFERENCED_PARAMETER(instance);
-    UNREFERENCED_PARAMETER(reason);
     UNREFERENCED_PARAMETER(reserved);
+    if (reason == DLL_PROCESS_ATTACH) {
+        ResolutionScale::subscribe(refreshResolutionDependentUi);
+    }
+    else if (reason == DLL_PROCESS_DETACH) {
+        ResolutionScale::unsubscribe(refreshResolutionDependentUi);
+    }
     return TRUE;
 }

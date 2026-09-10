@@ -1,4 +1,5 @@
 LIBRARY ClassSelectionLayoutConstantsTest
 EXPORTS
     patchInitialClassSelectionRects
+    refreshResolutionDependentUi
     patchClassSelectionLayoutRects

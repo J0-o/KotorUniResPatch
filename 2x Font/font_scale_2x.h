@@ -6,5 +6,6 @@ namespace FontScale2x {
 
 void scaleFontBeforeTextOut(void* font);
 void scaleGuiStringBeforeDraw(void* guiString);
+void refreshResolutionDependentUi();
 
 }

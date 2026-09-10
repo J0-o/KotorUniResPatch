@@ -5,6 +5,7 @@
 
 #include "GameAPI/CExoIni.h"
 #include "GameAPI/CExoString.h"
+#include "GameAPI/CSWGuiManager.h"
 #include "GameAPI/GameVersion.h"
 #include "resolution_scale.h"
 
@@ -12,6 +13,7 @@ namespace {
 
 constexpr uintptr_t ScreenWidthAddress = 0x0078D1D4;
 constexpr uintptr_t ScreenHeightAddress = 0x0078D1D8;
+constexpr uintptr_t CenterGuiRootAddress = 0x0040A600;
 constexpr int DefaultScreenWidth = 800;
 constexpr int DefaultScreenHeight = 600;
 constexpr int BaseWidth = 640;
@@ -35,12 +37,121 @@ UniversalScaleState scaleState = {
     1,
     1,
     0,
+    0,
 };
 
 bool settingsLoaded = false;
 bool scaleStateInitialized = false;
 bool overrideScaleFactor = false;
 double manualScaleFactor = DefaultScaleFactor;
+constexpr int MaxResolutionRefreshCallbacks = 32;
+ResolutionRefreshCallback refreshCallbacks[MaxResolutionRefreshCallbacks] = {};
+
+constexpr char FontRefreshModuleName[] = "font-scale-2x-v1.dll";
+constexpr const char* RefreshModuleNames[] = {
+    "menu-scale-v1.dll",
+    "container-popup-scale-test-v1.dll",
+    "scaled-popups.dll",
+    "class-selection-layout-constants-test-v1.dll",
+    "small-root-panel-scale-test-v1.dll",
+    "scaled-scrollbars-v1.dll",
+    "scaled-menu-borders.dll",
+    "area-map-hud-minimap-2x-scale-v1.dll",
+    "list-item-height-2x-v1.dll",
+};
+constexpr char ResolutionRefreshExport[] = "refreshResolutionDependentUi";
+
+// CGuiInGame::ResetInterfaceForSize (0x0062F5F0) already handles these fields:
+// 0x40, 0x54, 0x58, 0x5C, 0x70, 0x74, 0x90, 0x98, 0x9C, and 0xA0.
+// Its remaining persistent screen owners were never recentered or dirtied.
+constexpr DWORD AdditionalGuiOwnerOffsets[] = {
+    0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C, 0x20, 0x24, 0x28,
+    0x44, 0x48, 0x4C, 0x50, 0x60, 0x64, 0x68, 0x6C,
+    0x78, 0x7C, 0x80, 0x84, 0x8C, 0x94, 0xA4, 0xA8,
+};
+
+void centerAndDirtyGuiOwner(void* owner) {
+    if (!owner) {
+        return;
+    }
+
+    __try {
+        char* object = static_cast<char*>(owner);
+        void* guiManager = *reinterpret_cast<void**>(object + 0x18);
+        const int width = *reinterpret_cast<int*>(object + 0x0C);
+        const int height = *reinterpret_cast<int*>(object + 0x10);
+        if (!guiManager || width <= 0 || height <= 0 ||
+            width > 8192 || height > 8192) {
+            return;
+        }
+
+        typedef void(__thiscall *CenterGuiRootFn)(void*);
+        reinterpret_cast<CenterGuiRootFn>(CenterGuiRootAddress)(owner);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
+void refreshAdditionalNativeGuiRoots(void* guiInGame) {
+    if (!guiInGame) {
+        return;
+    }
+
+    char* base = static_cast<char*>(guiInGame);
+    for (DWORD offset : AdditionalGuiOwnerOffsets) {
+        void* owner = nullptr;
+        __try {
+            owner = *reinterpret_cast<void**>(base + offset);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return;
+        }
+        centerAndDirtyGuiOwner(owner);
+    }
+}
+
+ResolutionRefreshCallback findKnownRefreshCallback(const char* moduleName) {
+    HMODULE module = GetModuleHandleA(moduleName);
+    if (!module) {
+        return nullptr;
+    }
+    return reinterpret_cast<ResolutionRefreshCallback>(
+        GetProcAddress(module, ResolutionRefreshExport));
+}
+
+bool isKnownRefreshCallback(ResolutionRefreshCallback callback) {
+    for (const char* moduleName : RefreshModuleNames) {
+        if (findKnownRefreshCallback(moduleName) == callback) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void invokeRefreshCallback(ResolutionRefreshCallback callback) {
+    if (!callback) {
+        return;
+    }
+    __try {
+        callback();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
+void notifyResolutionRefreshCallbacks() {
+    // Resolve family members at event time so DLL load order cannot suppress
+    // the notification. Generic menu layout runs before specialized children.
+    for (const char* moduleName : RefreshModuleNames) {
+        invokeRefreshCallback(findKnownRefreshCallback(moduleName));
+    }
+
+    for (ResolutionRefreshCallback callback : refreshCallbacks) {
+        if (callback && !isKnownRefreshCallback(callback)) {
+            invokeRefreshCallback(callback);
+        }
+    }
+}
 
 bool pathBesideExe(const char* name, char* output, DWORD size) {
     const DWORD length = GetModuleFileNameA(nullptr, output, size);
@@ -149,7 +260,7 @@ int readPositiveInt(uintptr_t address, int fallback) {
     }
 }
 
-void updateScaleState() {
+bool updateScaleState() {
     loadSettings();
 
     const int screenWidth = readPositiveInt(ScreenWidthAddress, DefaultScreenWidth);
@@ -157,7 +268,7 @@ void updateScaleState() {
     if (scaleStateInitialized &&
         screenWidth == scaleState.screenWidth &&
         screenHeight == scaleState.screenHeight) {
-        return;
+        return false;
     }
 
     int scaleNumerator = 0;
@@ -201,8 +312,10 @@ void updateScaleState() {
         contentScaleNumerator,
         contentScaleDenominator,
         contentScalingEnabled,
+        scaleState.layoutGeneration + 1,
     };
     scaleStateInitialized = true;
+    return true;
 }
 
 }
@@ -210,6 +323,50 @@ void updateScaleState() {
 extern "C" const UniversalScaleState* __cdecl getUniversalScaleState() {
     updateScaleState();
     return &scaleState;
+}
+
+extern "C" int __cdecl registerResolutionRefreshCallback(
+    ResolutionRefreshCallback callback) {
+    if (!callback) {
+        return 0;
+    }
+
+    for (ResolutionRefreshCallback registered : refreshCallbacks) {
+        if (registered == callback) {
+            return 1;
+        }
+    }
+
+    for (ResolutionRefreshCallback& registered : refreshCallbacks) {
+        if (!registered) {
+            registered = callback;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern "C" void __cdecl unregisterResolutionRefreshCallback(
+    ResolutionRefreshCallback callback) {
+    for (ResolutionRefreshCallback& registered : refreshCallbacks) {
+        if (registered == callback) {
+            registered = nullptr;
+            return;
+        }
+    }
+}
+
+extern "C" void __cdecl onResolutionModeCommitted(void* guiInGame) {
+    // 0x005F1A70 runs after the stock resolution setter has updated the
+    // renderer, GUI render area, and its safe native UI subset. Observing the
+    // dimensions here guarantees that even a change with no scaled constructor
+    // callbacks publishes a new layout generation before the setter returns.
+    updateScaleState();
+    invokeRefreshCallback(findKnownRefreshCallback(FontRefreshModuleName));
+    CSWGuiManager guiManager;
+    guiManager.UpdateAllFonts();
+    refreshAdditionalNativeGuiRoots(guiInGame);
+    notifyResolutionRefreshCallbacks();
 }
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {

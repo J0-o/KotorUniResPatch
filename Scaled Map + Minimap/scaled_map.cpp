@@ -5,6 +5,8 @@ namespace WidescreenUiScale {
 
 namespace {
 
+void* liveMenuMap = nullptr;
+
 constexpr int UiBaseHeight = 480;
 constexpr int AreaMapTextureWidth = 512;
 constexpr int AreaMapTextureHeight = 256;
@@ -180,6 +182,7 @@ void scaleLiveMenuMapControlSizes(void* map, const UniversalScaleState& scale) {
 }
 
 void prepareMenuMapScale(void* map) {
+    liveMenuMap = map;
     const UniversalScaleState* scale = ResolutionScale::get();
     if (!scale || (scale->uiWidth == BaseWidth && scale->uiHeight == BaseHeight)) {
         return;
@@ -187,6 +190,20 @@ void prepareMenuMapScale(void* map) {
 
     patchAreaMapEngineDimensions(*scale);
     scaleLiveMenuMapControlSizes(map, *scale);
+}
+
+void refreshResolutionState() {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale) {
+        return;
+    }
+
+    patchAreaMapCoordinateBounds(*scale);
+    patchAreaMapIconMaterialSizes(*scale);
+    patchAreaMapEngineDimensions(*scale);
+    if (liveMenuMap) {
+        scaleLiveMenuMapControlSizes(liveMenuMap, *scale);
+    }
 }
 
 void prepareMenuMapIconMaterials() {

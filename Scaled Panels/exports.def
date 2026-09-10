@@ -4,3 +4,4 @@ EXPORTS
     scaleQuickPanel
     scaleLevelUpPanel
     scaleCustomPanel
+    refreshResolutionDependentUi

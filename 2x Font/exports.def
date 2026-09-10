@@ -2,3 +2,4 @@ LIBRARY FontScale2x
 EXPORTS
     scaleFontBeforeTextOut
     scaleGuiStringBeforeDraw
+    refreshResolutionDependentUi

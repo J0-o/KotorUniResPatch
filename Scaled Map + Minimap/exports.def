@@ -10,3 +10,4 @@ EXPORTS
     zoomHudMinimapImageDraw
     beginHudMinimapGridZoom
     endHudMinimapGridZoom
+    refreshResolutionDependentUi

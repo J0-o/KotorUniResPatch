@@ -28,6 +28,22 @@ constexpr DWORD SkillInfoOkButtonOffset = 0x484;
 constexpr DWORD SkillInfoRowOffset = 0x648;
 constexpr DWORD SkillInfoRowStride = 0x310;
 constexpr int SkillInfoRowCount = 10;
+constexpr DWORD MaximumPanelChildren = 1024;
+
+struct ControlRectSnapshot {
+    char* control;
+    Rect rect;
+};
+
+struct ResolutionPopupSnapshot {
+    char* owner;
+    Rect root;
+    ControlRectSnapshot children[MaximumPanelChildren];
+    DWORD childCount;
+    unsigned int layoutGeneration;
+};
+
+ResolutionPopupSnapshot resolutionPopupSnapshot = {};
 
 bool safeReadDword(const void* address, DWORD& value) {
     __try {
@@ -212,6 +228,63 @@ void scalePanelControls(char* panel, const UniversalScaleState& scale,
     }
 }
 
+bool captureResolutionPopup(char* owner,
+                            const UniversalScaleState& scale) {
+    DWORD childrenData = 0;
+    DWORD childrenSize = 0;
+    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
+    if (!hasUsefulRect(*root) ||
+        !safeReadDword(owner + 0x20, childrenData) ||
+        !safeReadDword(owner + 0x24, childrenSize) ||
+        childrenData == 0 ||
+        childrenSize > MaximumPanelChildren) {
+        return false;
+    }
+
+    resolutionPopupSnapshot.owner = owner;
+    resolutionPopupSnapshot.root = *root;
+    resolutionPopupSnapshot.childCount = 0;
+    resolutionPopupSnapshot.layoutGeneration = scale.layoutGeneration;
+
+    for (DWORD i = 0; i < childrenSize; ++i) {
+        DWORD childAddress = 0;
+        if (!safeReadDword(
+                reinterpret_cast<const void*>(childrenData + (i * sizeof(DWORD))),
+                childAddress) ||
+            childAddress == 0) {
+            continue;
+        }
+
+        char* child = reinterpret_cast<char*>(childAddress);
+        Rect* rect = reinterpret_cast<Rect*>(child + sizeof(DWORD));
+        if (!hasUsefulRect(*rect)) {
+            continue;
+        }
+
+        ControlRectSnapshot& snapshot = resolutionPopupSnapshot.children[
+            resolutionPopupSnapshot.childCount++];
+        snapshot.control = child;
+        snapshot.rect = *rect;
+    }
+
+    return true;
+}
+
+void applyResolutionPopupSnapshot(const UniversalScaleState& scale) {
+    ResolutionPopupSnapshot& snapshot = resolutionPopupSnapshot;
+    if (!snapshot.owner) {
+        return;
+    }
+
+    for (DWORD i = 0; i < snapshot.childCount; ++i) {
+        const ControlRectSnapshot& child = snapshot.children[i];
+        callControlSetRect(child.control, scaledRect(child.rect, scale));
+    }
+
+    callControlSetRect(snapshot.owner, scaledRect(snapshot.root, scale));
+    snapshot.layoutGeneration = scale.layoutGeneration;
+}
+
 void scaleSkillInfoTooltipControls(char* owner, const UniversalScaleState& scale) {
     scaleControl(owner + SkillInfoListOffset, scale);
     scaleControl(owner + SkillInfoTitleOffset, scale);
@@ -282,13 +355,28 @@ void scaleLateResolutionPopup(void* ownerPtr) {
         return;
     }
 
-    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
-    if (!hasUsefulRect(*root)) {
+    if (!captureResolutionPopup(owner, *scale)) {
         return;
     }
 
-    scalePanelControls(owner, *scale);
-    callControlSetRect(owner, scaledRect(*root, *scale));
+    applyResolutionPopupSnapshot(*scale);
+}
+
+void refreshLateResolutionPopup(void* ownerPtr) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    char* owner = static_cast<char*>(ownerPtr);
+    if (!scale ||
+        !owner ||
+        resolutionPopupSnapshot.owner != owner ||
+        resolutionPopupSnapshot.layoutGeneration == scale->layoutGeneration) {
+        return;
+    }
+
+    applyResolutionPopupSnapshot(*scale);
+}
+
+void refreshTrackedPopups() {
+    refreshLateResolutionPopup(resolutionPopupSnapshot.owner);
 }
 
 void scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot) {

@@ -13,5 +13,6 @@ struct Rect {
 
 void patchClassSelectionLayoutRects(void* ownerStackSlot, void* currentSlotMarker, void* baseRectStack, void* wrapperRectStack);
 void patchInitialClassSelectionRects(void* owner);
+void refreshClassSelectionRects();
 
 }

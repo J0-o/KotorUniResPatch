@@ -2,3 +2,4 @@ LIBRARY MenuScale
 EXPORTS
     scaleMenuPanelTree
     scalePazaakGameCards
+    refreshResolutionDependentUi

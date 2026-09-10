@@ -19,5 +19,6 @@ void prepareMenuMapIconMaterials();
 void prepareMenuMapDraw(void* map, int* width);
 void prepareMenuMapMarkerDraw(Rect* rect);
 void prepareAreaMapDimensionsForScreen();
+void refreshResolutionState();
 
 }

@@ -31,6 +31,20 @@ exclude_from_restore = []
 source = "esi"
 type = "pointer"
 
+# The resolution selection handler has completed the native mode switch and
+# its partial UI refresh. ESI still owns the live optresolution panel. Reapply
+# the constructor-captured base rectangles for the provider's new generation.
+[[hooks]]
+address = 0x006DF992
+type = "detour"
+function = "refreshLateResolutionPopup"
+original_bytes = [0x8B, 0x8C, 0x24, 0xD4, 0x00, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
 [[hooks]]
 address = 0x006C04D7
 type = "detour"

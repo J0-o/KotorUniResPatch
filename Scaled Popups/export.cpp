@@ -1,4 +1,5 @@
 #include "popup_dialog_scale_test.h"
+#include "../Common/ResolutionScale.h"
 
 extern "C" void __cdecl scaleCenteredPopup(void* owner, DWORD* returnAddressSlot) {
     __try {
@@ -32,6 +33,14 @@ extern "C" void __cdecl scaleLateResolutionPopup(void* owner) {
     }
 }
 
+extern "C" void __cdecl refreshLateResolutionPopup(void* owner) {
+    __try {
+        PopupDialogScaleTest::refreshLateResolutionPopup(owner);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 extern "C" void __cdecl scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot) {
     __try {
         PopupDialogScaleTest::scaleStatusSummarySetRect(control, returnAddressSlot, rectPointerSlot);
@@ -56,9 +65,22 @@ extern "C" void __cdecl scaleMessageBoxAfterFix(void* owner) {
     }
 }
 
+extern "C" void __cdecl refreshResolutionDependentUi() {
+    __try {
+        PopupDialogScaleTest::refreshTrackedPopups();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     UNREFERENCED_PARAMETER(instance);
-    UNREFERENCED_PARAMETER(reason);
     UNREFERENCED_PARAMETER(reserved);
+    if (reason == DLL_PROCESS_ATTACH) {
+        ResolutionScale::subscribe(refreshResolutionDependentUi);
+    }
+    else if (reason == DLL_PROCESS_DETACH) {
+        ResolutionScale::unsubscribe(refreshResolutionDependentUi);
+    }
     return TRUE;
 }

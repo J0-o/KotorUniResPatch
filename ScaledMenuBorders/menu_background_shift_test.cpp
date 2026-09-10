@@ -19,6 +19,28 @@ constexpr char LoadBackgroundName[] = "800x600load";
 constexpr char MapBackgroundName[] = "800x600map";
 constexpr char StoreBackgroundName[] = "800x600store";
 constexpr char ComputerAltBackgroundName[] = "800x600comp1";
+constexpr int MaxTrackedParents = 128;
+
+struct TrackedParent {
+    void* object;
+    DWORD vtable;
+};
+
+TrackedParent trackedParents[MaxTrackedParents] = {};
+
+void rememberParent(void* object) {
+    const DWORD vtable = *reinterpret_cast<DWORD*>(object);
+    for (TrackedParent& tracked : trackedParents) {
+        if (tracked.object == object) {
+            tracked.vtable = vtable;
+            return;
+        }
+        if (!tracked.object) {
+            tracked = { object, vtable };
+            return;
+        }
+    }
+}
 
 bool stringEquals(const char* actual, const char* expected) {
     for (;;) {
@@ -75,9 +97,32 @@ void centerMenuBackgroundDynamic(void* parent) {
             return;
         }
 
+        rememberParent(parent);
         centerControlFor4096Background(child, *scale);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
+void refreshMenuBackgrounds() {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale) {
+        return;
+    }
+    for (TrackedParent& tracked : trackedParents) {
+        if (!tracked.object) {
+            continue;
+        }
+        __try {
+            if (*reinterpret_cast<DWORD*>(tracked.object) != tracked.vtable) {
+                tracked = {};
+                continue;
+            }
+            centerMenuBackgroundDynamic(tracked.object);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            tracked = {};
+        }
     }
 }
 

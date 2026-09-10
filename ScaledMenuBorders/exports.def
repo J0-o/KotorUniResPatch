@@ -1,3 +1,4 @@
 LIBRARY MenuBackgroundShiftTest
 EXPORTS
     center800x600backDynamic
+    refreshResolutionDependentUi

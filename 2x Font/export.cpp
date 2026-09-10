@@ -16,6 +16,14 @@ extern "C" void __cdecl scaleGuiStringBeforeDraw(void* guiString) {
     }
 }
 
+extern "C" void __cdecl refreshResolutionDependentUi() {
+    __try {
+        FontScale2x::refreshResolutionDependentUi();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     UNREFERENCED_PARAMETER(instance);
     UNREFERENCED_PARAMETER(reason);

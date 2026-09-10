@@ -1,7 +1,7 @@
 [patch]
 id = "scaled-kotor"
 name = "Scaled Kotor"
-version = "1.4.0"
+version = "1.9.0"
 author = "J"
 description = "Provides resolution-derived layout sizing and configurable content scaling through ScaledKotor.ini."
 

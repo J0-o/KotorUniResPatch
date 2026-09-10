@@ -4,6 +4,8 @@ EXPORTS
     scaleBarkPopup
     scalePausePopup
     scaleLateResolutionPopup
+    refreshLateResolutionPopup
     scaleStatusSummarySetRect
     scaleMessageBoxButtonSetRect
     scaleMessageBoxAfterFix
+    refreshResolutionDependentUi

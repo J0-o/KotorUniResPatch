@@ -15,5 +15,6 @@ void scaleQuickOrCustomPanel(void* owner);
 void scaleQuickPanel(void* owner);
 void scaleLevelUpPanel(void* owner);
 void scaleCustomPanel(void* owner);
+void refreshScaledPanels();
 
 }

@@ -1,13 +1,13 @@
 [patch]
-id = "font-scale-2x-v1"
-name = "2x Font"
-version = "1.5.0"
+id = "list-item-height-2x-v1"
+name = "Scaled List Items"
+version = "2.4.1"
 author = "J"
-description = "Scales loaded game fonts relative to a 1x baseline at 1080p."
+description = "Scales item list-box rows relative to a 1x baseline at 1080p."
 
 requires = ["scaled-kotor"]
 
-conflicts = ["font-scale-2x"]
+conflicts = []
 
 [patch.supported_versions]
 kotor1_gog_103 = "9C10E0450A6EECA417E036E3CDE7474FED1F0A92AAB018446D156944DEA91435"

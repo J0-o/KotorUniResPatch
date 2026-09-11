@@ -1,13 +1,13 @@
 [patch]
 id = "class-selection-layout-constants-test-v1"
 name = "Scaled Class Menu"
-version = "1.4.0"
+version = "1.4.1"
 author = "J"
 description = "Scale class selection menu."
 
 requires = ["menu-scale-v1", "scaled-kotor"]
 
-conflicts = ["class-selection-box-test-v1"]
+conflicts = []
 
 [patch.supported_versions]
 kotor1_gog_103 = "9C10E0450A6EECA417E036E3CDE7474FED1F0A92AAB018446D156944DEA91435"

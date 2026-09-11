@@ -1,11 +1,11 @@
 [patch]
 id = "scaled-kotor"
 name = "Scaled Kotor"
-version = "1.9.0"
+version = "1.10.0"
 author = "J"
-description = "Provides resolution-derived layout sizing and configurable content scaling through ScaledKotor.ini."
+description = "Unlocks widescreen resolutions and provides resolution layout sizing configurable through ScaledKotor.ini."
 
-requires = ["widescreen-resolution-unlock-v1"]
+requires = []
 
 conflicts = []
 

@@ -1,9 +1,9 @@
 [patch]
-id = "list-item-height-2x-v1"
-name = "2x List Item Height"
-version = "2.4.0"
+id = "font-scale-2x-v1"
+name = "Scaled Font"
+version = "1.5.1"
 author = "J"
-description = "Scales item list-box rows relative to a 1x baseline at 1080p."
+description = "Scales loaded game fonts relative to a 1x baseline at 1080p."
 
 requires = ["scaled-kotor"]
 

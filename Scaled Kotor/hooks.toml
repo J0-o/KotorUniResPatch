@@ -1,3 +1,79 @@
+# Resolution validation fix: FUN_005F0C60 normally accepts only stock 4:3 modes.
+[[hooks]]
+address = 0x005F0C60
+type = "simple"
+original_bytes = [
+    0x8B, 0x44, 0x24, 0x04,
+    0x3D, 0x20, 0x03, 0x00, 0x00
+]
+replacement_bytes = [
+    0xB8, 0x01, 0x00, 0x00, 0x00,
+    0xC2, 0x08, 0x00, 0x00
+]
+
+# GUI constructor fallback constants: force unsupported sizes through the 800x600 asset path.
+[[hooks]]
+address = 0x0068C4E3
+type = "simple"
+original_bytes = [0x00, 0x04, 0x00, 0x00]
+replacement_bytes = [0x00, 0x00, 0x00, 0x00]
+
+[[hooks]]
+address = 0x0068C4F3
+type = "simple"
+original_bytes = [0x00, 0x05, 0x00, 0x00]
+replacement_bytes = [0x00, 0x00, 0x00, 0x00]
+
+[[hooks]]
+address = 0x0068C4FA
+type = "simple"
+original_bytes = [0x40, 0x06, 0x00, 0x00]
+replacement_bytes = [0x00, 0x00, 0x00, 0x00]
+
+# Disable BTN_RESOLUTION through the normal GUI control state while the virtual
+# machine is active. This leaves the original callback intact and automatically
+# re-enables the button when the same menu is set up at the main menu.
+[[hooks]]
+address = 0x006DEF30
+type = "detour"
+function = "setResolutionButtonAvailability"
+original_bytes = [0xA1, 0xFC, 0x39, 0x7A, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "ecx"
+type = "pointer"
+
+# SetNewOptions has committed the requested AA value at this point. If AA
+# changed and no other advanced option is already rebuilding the renderer,
+# queue the game's normal deferred video-mode reset so the new multisample
+# pixel format is applied once from the main loop.
+[[hooks]]
+address = 0x006E022B
+type = "detour"
+function = "queueVideoModeResetForAntiAliasChange"
+original_bytes = [0x39, 0xBE, 0x30, 0x23, 0x00, 0x00]
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "esi"
+type = "pointer"
+
+# Tooltip crash fix for non-stock widths.
+[[hooks]]
+address = 0x00627802
+type = "simple"
+original_bytes = [
+    0xA1, 0xD4, 0xD1, 0x78, 0x00,
+    0x3D, 0x40, 0x06, 0x00, 0x00,
+    0xC6, 0x44, 0x24, 0x24, 0x01
+]
+replacement_bytes = [
+    0xC6, 0x44, 0x24, 0x24, 0x01,
+    0xE9, 0x94, 0x00, 0x00, 0x00,
+    0x90, 0x90, 0x90, 0x90, 0x90
+]
+
 # The native display-mode setter reaches this instruction after updating the
 # renderer and after its partial UI refresh at 0x0062F5F0. The callback publishes
 # the new shared scale generation, applies 2x font metrics, asks the GUI manager

@@ -1,13 +1,13 @@
 [patch]
 id = "container-popup-scale-test-v1"
 name = "Scaled Container Popup"
-version = "1.5.1"
+version = "1.5.2"
 author = "J"
 description = "Scales the container/loot popup and its buttons with the configurable content factor."
 
 requires = ["scaled-kotor"]
 
-conflicts = ["widescreen-ui-scale-v1", "widescreen-ui-scale"]
+conflicts = []
 
 [patch.supported_versions]
 kotor1_gog_103 = "9C10E0450A6EECA417E036E3CDE7474FED1F0A92AAB018446D156944DEA91435"

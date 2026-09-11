@@ -1,4 +1,5 @@
-# Universal Resolution Patch
+# Scaled Kotor | Widescreen + UI Scaling
+
 
 Use with Kotor Patch Manager: https://github.com/LaneDibello/Kotor-Patch-Manager
 

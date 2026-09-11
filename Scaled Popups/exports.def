@@ -4,7 +4,9 @@ EXPORTS
     scaleBarkPopup
     scalePausePopup
     scaleLateResolutionPopup
-    refreshLateResolutionPopup
+    captureStatusSummary
+    restoreStatusSummary
+    clearTrackedPopup
     scaleStatusSummarySetRect
     scaleMessageBoxButtonSetRect
     scaleMessageBoxAfterFix

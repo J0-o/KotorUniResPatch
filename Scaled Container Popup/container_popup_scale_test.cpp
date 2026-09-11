@@ -9,8 +9,8 @@ constexpr DWORD ContainerVtable = 0x007567E0;
 constexpr DWORD MaxSnapshotChildren = 64;
 
 struct ControlSnapshot {
-    char* control;
     Rect rect;
+    bool valid;
 };
 
 struct PanelSnapshot {
@@ -75,42 +75,13 @@ void callControlSetRect(char* control, const Rect& rect) {
     }
 }
 
-void scaleControl(char* control, const UniversalScaleState& scale) {
-    if (!control) {
-        return;
-    }
-
-    Rect* rect = reinterpret_cast<Rect*>(control + sizeof(DWORD));
-    if (hasUsefulRect(*rect)) {
-        callControlSetRect(control, scaledChildRect(*rect, scale));
-    }
-}
-
-void scalePanelControls(char* panel, const UniversalScaleState& scale) {
-    DWORD childrenData = 0;
-    DWORD childrenSize = 0;
-    if (!safeReadDword(panel + 0x20, childrenData) ||
-        !safeReadDword(panel + 0x24, childrenSize) ||
-        childrenData == 0 ||
-        childrenSize > 64) {
-        return;
-    }
-
-    for (DWORD i = 0; i < childrenSize; ++i) {
-        DWORD child = 0;
-        if (safeReadDword(reinterpret_cast<const void*>(childrenData + (i * sizeof(DWORD))), child) &&
-            child != 0) {
-            scaleControl(reinterpret_cast<char*>(child), scale);
-        }
-    }
-}
-
 bool capturePanel(char* owner) {
     DWORD childrenData = 0;
     DWORD childrenSize = 0;
     if (!safeReadDword(owner + 0x20, childrenData) ||
         !safeReadDword(owner + 0x24, childrenSize) ||
         childrenSize > MaxSnapshotChildren ||
+        (childrenSize != 0 && childrenData == 0) ||
         !hasUsefulRect(*reinterpret_cast<Rect*>(owner + sizeof(DWORD)))) {
         return false;
     }
@@ -118,6 +89,7 @@ bool capturePanel(char* owner) {
     livePanel = {};
     livePanel.owner = owner;
     livePanel.root = *reinterpret_cast<Rect*>(owner + sizeof(DWORD));
+    livePanel.childCount = childrenSize;
     for (DWORD i = 0; i < childrenSize; ++i) {
         DWORD childValue = 0;
         if (!safeReadDword(reinterpret_cast<void*>(childrenData + i * sizeof(DWORD)),
@@ -127,7 +99,8 @@ bool capturePanel(char* owner) {
         char* child = reinterpret_cast<char*>(childValue);
         Rect rect = *reinterpret_cast<Rect*>(child + sizeof(DWORD));
         if (hasUsefulRect(rect)) {
-            livePanel.children[livePanel.childCount++] = { child, rect };
+            livePanel.children[i].rect = rect;
+            livePanel.children[i].valid = true;
         }
     }
     return true;
@@ -141,9 +114,29 @@ void applyPanel(const UniversalScaleState& scale) {
         return;
     }
 
+    DWORD childrenData = 0;
+    DWORD childrenSize = 0;
+    if (!safeReadDword(livePanel.owner + 0x20, childrenData) ||
+        !safeReadDword(livePanel.owner + 0x24, childrenSize) ||
+        childrenSize != livePanel.childCount ||
+        (childrenSize != 0 && childrenData == 0)) {
+        return;
+    }
+
     for (DWORD i = 0; i < livePanel.childCount; ++i) {
-        callControlSetRect(livePanel.children[i].control,
-            scaledChildRect(livePanel.children[i].rect, scale));
+        const ControlSnapshot& child = livePanel.children[i];
+        if (!child.valid) {
+            continue;
+        }
+
+        DWORD childAddress = 0;
+        if (safeReadDword(
+                reinterpret_cast<const void*>(childrenData + (i * sizeof(DWORD))),
+                childAddress) &&
+            childAddress != 0) {
+            callControlSetRect(reinterpret_cast<char*>(childAddress),
+                scaledChildRect(child.rect, scale));
+        }
     }
     callControlSetRect(livePanel.owner, scaledRootRect(livePanel.root, scale));
 }

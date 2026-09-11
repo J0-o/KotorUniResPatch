@@ -10,32 +10,67 @@ constexpr DWORD DebugCenterReturn = 0x006BDDBB;
 constexpr DWORD SaveNameCenterReturn = 0x006CAFFD;
 constexpr DWORD SkillInfoCenterReturn = 0x006CE9A9;
 constexpr DWORD DebugAltCenterReturn = 0x006CF6CB;
-constexpr DWORD StatusButtonOffset = 0x1980;
-constexpr int StatusButtonBaseWidth = 100;
-constexpr int StatusButtonBaseHeight = 22;
-constexpr int StatusButtonBaseBottomMargin = 10;
 constexpr DWORD StatusSummaryRootReturn = 0x006262B7;
-constexpr DWORD StatusSummaryLowerReturn = 0x00626301;
+constexpr DWORD StatusSummaryButtonReturn = 0x00626301;
+constexpr DWORD StatusSummaryButtonOffset = 0x1980;
+constexpr DWORD StatusSummaryTextRowOffset = 0xE40;
+constexpr DWORD StatusSummaryRowStride = 0x140;
+constexpr DWORD StatusSummaryControlFlagsOffset = 0x44;
+constexpr DWORD StatusSummaryVisibleFlag = 0x02;
+constexpr int StatusSummaryRowCount = 9;
+constexpr int StatusSummaryRightMargin = 10;
+constexpr int StatusSummaryButtonBaseWidth = 100;
+constexpr int StatusSummaryButtonBaseHeight = 22;
+constexpr int StatusSummaryButtonBaseBottomMargin = 10;
 constexpr DWORD MessageBoxOkButtonFinalReturn = 0x0062588D;
 constexpr DWORD MessageBoxCancelButtonFinalReturn = 0x006258DB;
 constexpr DWORD MessageBoxFrameOffset = 0x74;
 constexpr DWORD MessageBoxFrameIconOffset = 0x1B4;
+constexpr DWORD MessageBoxIconFillStyleOffset =
+    MessageBoxFrameIconOffset + 0x5C + 0x30;
+constexpr DWORD MessageBoxIconFillStyleMask = 0x03;
+constexpr DWORD MessageBoxIconStretchFillStyle = 0x02;
 constexpr DWORD MessageBoxOkButtonOffset = 0x2F4;
 constexpr DWORD MessageBoxCancelButtonOffset = 0x4B8;
-constexpr DWORD SkillInfoListOffset = 0x64;
-constexpr DWORD SkillInfoTitleOffset = 0x344;
-constexpr DWORD SkillInfoOkButtonOffset = 0x484;
-constexpr DWORD SkillInfoRowOffset = 0x648;
+constexpr DWORD MessageBoxControlOffset = 0x67C;
+constexpr DWORD MessageBoxPanelBaseRectOffset = 0x95C;
+constexpr DWORD MessageBoxMessageBaseRectOffset = 0x96C;
+constexpr DWORD MessageBoxFitWidthOperand1 = 0x006256DC;
+constexpr DWORD MessageBoxFitHeightOperand1 = 0x006256E3;
+constexpr DWORD MessageBoxFitWidthOperand2 = 0x006256F6;
+constexpr DWORD MessageBoxFitHeightOperand2 = 0x00625759;
+constexpr DWORD MessageBoxIconInsetOperand = 0x0062540D;
+constexpr DWORD StatusSummaryFitWidthOperand1 = 0x006261B0;
+constexpr DWORD StatusSummaryFitWidthOperand2 = 0x006261F6;
+constexpr DWORD MaximumPanelChildren = 1024;
+constexpr DWORD SkillInfoRowsOffset = 0x648;
 constexpr DWORD SkillInfoRowStride = 0x310;
 constexpr int SkillInfoRowCount = 10;
-constexpr DWORD MaximumPanelChildren = 1024;
 
-struct ControlRectSnapshot {
-    char* control;
-    Rect rect;
+enum PopupSlot {
+    ConfirmPopup,
+    DebugPopup,
+    SaveNamePopup,
+    SkillInfoPopup,
+    DebugAltPopup,
+    BarkPopup,
+    PausePopup,
+    ResolutionPopup,
+    PopupSlotCount,
 };
 
-struct ResolutionPopupSnapshot {
+enum RootPlacement {
+    AuthoredPosition,
+    CenterHorizontally,
+    CenterBothAxes,
+};
+
+struct ControlRectSnapshot {
+    Rect rect;
+    bool valid;
+};
+
+struct PanelSnapshot {
     char* owner;
     Rect root;
     ControlRectSnapshot children[MaximumPanelChildren];
@@ -43,7 +78,30 @@ struct ResolutionPopupSnapshot {
     unsigned int layoutGeneration;
 };
 
-ResolutionPopupSnapshot resolutionPopupSnapshot = {};
+struct MessageBoxSnapshot {
+    char* owner;
+    Rect frame;
+    Rect okButton;
+    Rect cancelButton;
+    Rect message;
+    bool frameValid;
+    bool okButtonValid;
+    bool cancelButtonValid;
+    bool messageValid;
+    DWORD iconFillStyle;
+    bool iconFillStyleValid;
+};
+
+struct SkillInfoSnapshot {
+    char* owner;
+    ControlRectSnapshot rows[SkillInfoRowCount];
+};
+
+PanelSnapshot popupSnapshots[PopupSlotCount] = {};
+PanelSnapshot statusSummaryBaseline = {};
+PanelSnapshot statusSummaryRendered = {};
+MessageBoxSnapshot messageBoxSnapshot = {};
+SkillInfoSnapshot skillInfoSnapshot = {};
 
 bool safeReadDword(const void* address, DWORD& value) {
     __try {
@@ -70,102 +128,16 @@ Rect scaledRect(const Rect& rect, const UniversalScaleState& scale) {
     };
 }
 
-Rect scaledCenteredRect(const Rect& rect, const UniversalScaleState& scale) {
-    const int centerX = rect.left + (rect.width / 2);
-    const int centerY = rect.top + (rect.height / 2);
-    const int scaledWidth = scaleContentValue(rect.width, scale);
-    const int scaledHeight = scaleContentValue(rect.height, scale);
-    return {
-        centerX - (scaledWidth / 2),
-        centerY - (scaledHeight / 2),
-        scaledWidth,
-        scaledHeight,
-    };
-}
-
-void scaleStatusButton(char* control, Rect& rect, const UniversalScaleState& scale) {
-    if (!control) {
-        return;
+Rect placedRoot(const Rect& rect, const UniversalScaleState& scale,
+                RootPlacement placement) {
+    Rect scaled = scaledRect(rect, scale);
+    if (placement == CenterHorizontally || placement == CenterBothAxes) {
+        scaled.left = (scale.screenWidth - scaled.width) / 2;
     }
-
-    char* owner = control - StatusButtonOffset;
-    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
-    if (!hasUsefulRect(*root)) {
-        return;
+    if (placement == CenterBothAxes) {
+        scaled.top = (scale.screenHeight - scaled.height) / 2;
     }
-
-    const int centerX = rect.left + (rect.width / 2);
-    const int width = scaleContentValue(StatusButtonBaseWidth, scale);
-    const int height = scaleContentValue(StatusButtonBaseHeight, scale);
-    const int bottomMargin = scaleContentValue(StatusButtonBaseBottomMargin, scale);
-    rect.left = centerX - (width / 2);
-    rect.top = root->height - height - bottomMargin;
-    rect.width = width;
-    rect.height = height;
-}
-
-bool isCenteredPopupCall(DWORD returnAddress) {
-    return returnAddress == ConfirmCenterReturn ||
-        returnAddress == DebugCenterReturn ||
-        returnAddress == SaveNameCenterReturn ||
-        returnAddress == SkillInfoCenterReturn ||
-        returnAddress == DebugAltCenterReturn;
-}
-
-bool isMessageBoxButtonSetExtentReturn(DWORD returnAddress) {
-    return returnAddress == MessageBoxOkButtonFinalReturn ||
-        returnAddress == MessageBoxCancelButtonFinalReturn;
-}
-
-char* messageBoxOwnerFromButton(char* control, DWORD returnAddress) {
-    if (returnAddress == MessageBoxOkButtonFinalReturn) {
-        return control - MessageBoxOkButtonOffset;
-    }
-
-    if (returnAddress == MessageBoxCancelButtonFinalReturn) {
-        return control - MessageBoxCancelButtonOffset;
-    }
-
-    return nullptr;
-}
-
-int scaledMessageBoxButtonWidth(char* control, const Rect& rect, DWORD returnAddress,
-                                const UniversalScaleState& scale) {
-    int width = scaleContentValue(rect.width, scale);
-    char* owner = messageBoxOwnerFromButton(control, returnAddress);
-    if (!owner) {
-        return width;
-    }
-
-    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
-    if (!hasUsefulRect(*root)) {
-        return width;
-    }
-
-    const int margin = rect.left > 0 ? rect.left : 0;
-    const int maxWidth = root->width - (margin * 2);
-    if (maxWidth > 0 && width > maxWidth) {
-        width = maxWidth;
-    }
-
-    return width;
-}
-
-void callControlSetRect(char* control, const Rect& rect);
-
-void scaleMessageBoxFrameControl(char* owner, const UniversalScaleState& scale) {
-    char* control = owner + MessageBoxFrameOffset;
-    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
-    Rect* rect = reinterpret_cast<Rect*>(control + sizeof(DWORD));
-    if (!hasUsefulRect(*root) || !hasUsefulRect(*rect)) {
-        return;
-    }
-
-    if (rect->width >= root->width / 2) {
-        return;
-    }
-
-    callControlSetRect(control, scaledRect(*rect, scale));
+    return scaled;
 }
 
 void callControlSetRect(char* control, const Rect& rect) {
@@ -192,111 +164,363 @@ void callControlSetRect(char* control, const Rect& rect) {
     }
 }
 
-void scaleControl(char* control, const UniversalScaleState& scale) {
-    if (!control) {
-        return;
-    }
-
-    Rect* rect = reinterpret_cast<Rect*>(control + sizeof(DWORD));
-    if (hasUsefulRect(*rect)) {
-        callControlSetRect(control, scaledRect(*rect, scale));
-    }
+bool getPanelChildren(char* owner, DWORD& childrenData, DWORD& childrenSize) {
+    return owner &&
+        safeReadDword(owner + 0x20, childrenData) &&
+        safeReadDword(owner + 0x24, childrenSize) &&
+        childrenData != 0 &&
+        childrenSize <= MaximumPanelChildren;
 }
 
-void scalePanelControls(char* panel, const UniversalScaleState& scale,
-                        bool skipMessageBoxIcon = false) {
-    DWORD childrenData = 0;
-    DWORD childrenSize = 0;
-    if (!safeReadDword(panel + 0x20, childrenData) ||
-        !safeReadDword(panel + 0x24, childrenSize) ||
-        childrenData == 0 ||
-        childrenSize > 1024) {
-        return;
-    }
-
-    for (DWORD i = 0; i < childrenSize; ++i) {
-        DWORD child = 0;
-        if (safeReadDword(reinterpret_cast<const void*>(childrenData + (i * sizeof(DWORD))), child) &&
-            child != 0) {
-            if (skipMessageBoxIcon &&
-                reinterpret_cast<char*>(child) == panel + MessageBoxFrameIconOffset) {
-                continue;
-            }
-
-            scaleControl(reinterpret_cast<char*>(child), scale);
-        }
-    }
-}
-
-bool captureResolutionPopup(char* owner,
-                            const UniversalScaleState& scale) {
+bool capturePanel(PanelSnapshot& snapshot, char* owner) {
     DWORD childrenData = 0;
     DWORD childrenSize = 0;
     Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
     if (!hasUsefulRect(*root) ||
-        !safeReadDword(owner + 0x20, childrenData) ||
-        !safeReadDword(owner + 0x24, childrenSize) ||
-        childrenData == 0 ||
-        childrenSize > MaximumPanelChildren) {
+        !getPanelChildren(owner, childrenData, childrenSize)) {
         return false;
     }
 
-    resolutionPopupSnapshot.owner = owner;
-    resolutionPopupSnapshot.root = *root;
-    resolutionPopupSnapshot.childCount = 0;
-    resolutionPopupSnapshot.layoutGeneration = scale.layoutGeneration;
+    snapshot = {};
+    snapshot.owner = owner;
+    snapshot.root = *root;
+    snapshot.childCount = childrenSize;
 
     for (DWORD i = 0; i < childrenSize; ++i) {
         DWORD childAddress = 0;
         if (!safeReadDword(
-                reinterpret_cast<const void*>(childrenData + (i * sizeof(DWORD))),
+                reinterpret_cast<const void*>(childrenData +
+                    (i * sizeof(DWORD))),
+                childAddress) ||
+            childAddress == 0) {
+            continue;
+        }
+
+        Rect* rect = reinterpret_cast<Rect*>(childAddress + sizeof(DWORD));
+        if (hasUsefulRect(*rect)) {
+            snapshot.children[i].rect = *rect;
+            snapshot.children[i].valid = true;
+        }
+    }
+    return true;
+}
+
+bool resolveSnapshotChildren(const PanelSnapshot& snapshot,
+                             DWORD& childrenData) {
+    DWORD childrenSize = 0;
+    return snapshot.owner &&
+        getPanelChildren(snapshot.owner, childrenData, childrenSize) &&
+        childrenSize == snapshot.childCount;
+}
+
+void applyPanel(const PanelSnapshot& snapshot,
+                const UniversalScaleState& scale,
+                RootPlacement placement,
+                bool unscaled = false) {
+    DWORD childrenData = 0;
+    if (!resolveSnapshotChildren(snapshot, childrenData)) {
+        return;
+    }
+
+    for (DWORD i = 0; i < snapshot.childCount; ++i) {
+        if (!snapshot.children[i].valid) {
+            continue;
+        }
+
+        DWORD childAddress = 0;
+        if (!safeReadDword(
+                reinterpret_cast<const void*>(childrenData +
+                    (i * sizeof(DWORD))),
+                childAddress) ||
+            childAddress == 0) {
+            continue;
+        }
+
+        callControlSetRect(reinterpret_cast<char*>(childAddress),
+            unscaled ? snapshot.children[i].rect :
+            scaledRect(snapshot.children[i].rect, scale));
+    }
+
+    callControlSetRect(snapshot.owner, unscaled ? snapshot.root :
+        placedRoot(snapshot.root, scale, placement));
+}
+
+PopupSlot centeredPopupSlot(DWORD returnAddress) {
+    switch (returnAddress) {
+    case ConfirmCenterReturn: return ConfirmPopup;
+    case DebugCenterReturn: return DebugPopup;
+    case SaveNameCenterReturn: return SaveNamePopup;
+    case SkillInfoCenterReturn: return SkillInfoPopup;
+    default: return DebugAltPopup;
+    }
+}
+
+bool isCenteredPopupCall(DWORD returnAddress) {
+    return returnAddress == ConfirmCenterReturn ||
+        returnAddress == DebugCenterReturn ||
+        returnAddress == SaveNameCenterReturn ||
+        returnAddress == SkillInfoCenterReturn ||
+        returnAddress == DebugAltCenterReturn;
+}
+
+bool isMessageBoxButtonSetExtentReturn(DWORD returnAddress) {
+    return returnAddress == MessageBoxOkButtonFinalReturn ||
+        returnAddress == MessageBoxCancelButtonFinalReturn;
+}
+
+char* messageBoxOwnerFromButton(char* control, DWORD returnAddress) {
+    if (returnAddress == MessageBoxOkButtonFinalReturn) {
+        return control - MessageBoxOkButtonOffset;
+    }
+    if (returnAddress == MessageBoxCancelButtonFinalReturn) {
+        return control - MessageBoxCancelButtonOffset;
+    }
+    return nullptr;
+}
+
+void writeCodeValue(DWORD address, DWORD value) {
+    DWORD oldProtection = 0;
+    void* operand = reinterpret_cast<void*>(address);
+    if (VirtualProtect(operand, sizeof(DWORD), PAGE_EXECUTE_READWRITE,
+                       &oldProtection)) {
+        *reinterpret_cast<DWORD*>(operand) = value;
+        VirtualProtect(operand, sizeof(DWORD), oldProtection, &oldProtection);
+    }
+}
+
+void updateFitCeilings(const UniversalScaleState& scale) {
+    writeCodeValue(MessageBoxIconInsetOperand,
+        static_cast<DWORD>(scaleContentValue(32, scale)));
+    writeCodeValue(MessageBoxFitWidthOperand1,
+        static_cast<DWORD>(scale.screenWidth));
+    writeCodeValue(MessageBoxFitHeightOperand1,
+        static_cast<DWORD>(scale.screenHeight));
+    writeCodeValue(MessageBoxFitWidthOperand2,
+        static_cast<DWORD>(scale.screenWidth));
+    writeCodeValue(MessageBoxFitHeightOperand2,
+        static_cast<DWORD>(scale.screenHeight));
+    writeCodeValue(StatusSummaryFitWidthOperand1,
+        static_cast<DWORD>(scale.screenWidth));
+    writeCodeValue(StatusSummaryFitWidthOperand2,
+        static_cast<DWORD>(scale.screenWidth));
+    FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
+}
+
+void captureMessageBox(char* owner) {
+    messageBoxSnapshot = {};
+    messageBoxSnapshot.owner = owner;
+
+    const DWORD offsets[] = {
+        MessageBoxFrameOffset,
+        MessageBoxOkButtonOffset,
+        MessageBoxCancelButtonOffset,
+        MessageBoxControlOffset,
+    };
+    Rect* destinations[] = {
+        &messageBoxSnapshot.frame,
+        &messageBoxSnapshot.okButton,
+        &messageBoxSnapshot.cancelButton,
+        &messageBoxSnapshot.message,
+    };
+    bool* valid[] = {
+        &messageBoxSnapshot.frameValid,
+        &messageBoxSnapshot.okButtonValid,
+        &messageBoxSnapshot.cancelButtonValid,
+        &messageBoxSnapshot.messageValid,
+    };
+
+    for (int i = 0; i < 4; ++i) {
+        Rect* rect = reinterpret_cast<Rect*>(
+            owner + offsets[i] + sizeof(DWORD));
+        if (hasUsefulRect(*rect)) {
+            *destinations[i] = *rect;
+            *valid[i] = true;
+        }
+    }
+
+    messageBoxSnapshot.iconFillStyleValid = safeReadDword(
+        owner + MessageBoxIconFillStyleOffset,
+        messageBoxSnapshot.iconFillStyle);
+}
+
+void applyMessageBoxIconFillStyle(const UniversalScaleState& scale) {
+    if (!messageBoxSnapshot.owner ||
+        !messageBoxSnapshot.iconFillStyleValid) {
+        return;
+    }
+
+    DWORD current = 0;
+    DWORD* fillStyle = reinterpret_cast<DWORD*>(
+        messageBoxSnapshot.owner + MessageBoxIconFillStyleOffset);
+    if (!safeReadDword(fillStyle, current)) {
+        return;
+    }
+
+    const DWORD style = isIdentityContentScale(scale) ?
+        messageBoxSnapshot.iconFillStyle : MessageBoxIconStretchFillStyle;
+    *fillStyle = (current & ~MessageBoxIconFillStyleMask) |
+        (style & MessageBoxIconFillStyleMask);
+}
+
+void updateMessageBoxLayoutBases(const UniversalScaleState& scale) {
+    if (messageBoxSnapshot.owner != popupSnapshots[ConfirmPopup].owner ||
+        !messageBoxSnapshot.messageValid) {
+        return;
+    }
+
+    Rect* root = reinterpret_cast<Rect*>(
+        messageBoxSnapshot.owner + sizeof(DWORD));
+    if (hasUsefulRect(*root)) {
+        *reinterpret_cast<Rect*>(messageBoxSnapshot.owner +
+            MessageBoxPanelBaseRectOffset) = *root;
+        *reinterpret_cast<Rect*>(messageBoxSnapshot.owner +
+            MessageBoxMessageBaseRectOffset) =
+            scaledRect(messageBoxSnapshot.message, scale);
+    }
+}
+
+void captureSkillInfoRows(char* owner) {
+    skillInfoSnapshot = {};
+    skillInfoSnapshot.owner = owner;
+    for (int i = 0; i < SkillInfoRowCount; ++i) {
+        Rect* rect = reinterpret_cast<Rect*>(owner + SkillInfoRowsOffset +
+            (i * SkillInfoRowStride) + sizeof(DWORD));
+        if (hasUsefulRect(*rect)) {
+            skillInfoSnapshot.rows[i].rect = *rect;
+            skillInfoSnapshot.rows[i].valid = true;
+        }
+    }
+}
+
+void applySkillInfoRows(const UniversalScaleState& scale) {
+    if (skillInfoSnapshot.owner != popupSnapshots[SkillInfoPopup].owner) {
+        return;
+    }
+    for (int i = 0; i < SkillInfoRowCount; ++i) {
+        if (skillInfoSnapshot.rows[i].valid) {
+            callControlSetRect(skillInfoSnapshot.owner + SkillInfoRowsOffset +
+                (i * SkillInfoRowStride),
+                scaledRect(skillInfoSnapshot.rows[i].rect, scale));
+        }
+    }
+}
+
+bool isStatusSummaryTextRow(char* owner, char* control) {
+    for (int i = 0; i < StatusSummaryRowCount; ++i) {
+        if (control == owner + StatusSummaryTextRowOffset +
+                (i * StatusSummaryRowStride)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void scaleStatusSummaryButton(char* control, Rect& rect,
+                              const Rect& root,
+                              const UniversalScaleState& scale) {
+    if (!control || !hasUsefulRect(root)) {
+        return;
+    }
+
+    const int centerX = rect.left + (rect.width / 2);
+    rect.width = scaleContentValue(StatusSummaryButtonBaseWidth, scale);
+    rect.height = scaleContentValue(StatusSummaryButtonBaseHeight, scale);
+    rect.left = centerX - (rect.width / 2);
+    rect.top = root.height - rect.height -
+        scaleContentValue(StatusSummaryButtonBaseBottomMargin, scale);
+}
+
+int applyStatusSummaryChildren(const PanelSnapshot& snapshot,
+                               const UniversalScaleState& scale) {
+    DWORD childrenData = 0;
+    if (!resolveSnapshotChildren(snapshot, childrenData)) {
+        return 0;
+    }
+
+    int rightmostText = 0;
+    for (DWORD i = 0; i < snapshot.childCount; ++i) {
+        if (!snapshot.children[i].valid) {
+            continue;
+        }
+
+        DWORD childAddress = 0;
+        if (!safeReadDword(
+                reinterpret_cast<const void*>(childrenData +
+                    (i * sizeof(DWORD))),
                 childAddress) ||
             childAddress == 0) {
             continue;
         }
 
         char* child = reinterpret_cast<char*>(childAddress);
-        Rect* rect = reinterpret_cast<Rect*>(child + sizeof(DWORD));
-        if (!hasUsefulRect(*rect)) {
+        if (child == snapshot.owner + StatusSummaryButtonOffset) {
             continue;
         }
 
-        ControlRectSnapshot& snapshot = resolutionPopupSnapshot.children[
-            resolutionPopupSnapshot.childCount++];
-        snapshot.control = child;
-        snapshot.rect = *rect;
+        Rect scaled = scaledRect(snapshot.children[i].rect, scale);
+        if (isStatusSummaryTextRow(snapshot.owner, child)) {
+            scaled.width = snapshot.children[i].rect.width;
+            DWORD flags = 0;
+            if (safeReadDword(child + StatusSummaryControlFlagsOffset, flags) &&
+                (flags & StatusSummaryVisibleFlag) != 0) {
+                const int right = scaled.left + scaled.width;
+                if (right > rightmostText) {
+                    rightmostText = right;
+                }
+            }
+        }
+        callControlSetRect(child, scaled);
     }
-
-    return true;
+    return rightmostText;
 }
 
-void applyResolutionPopupSnapshot(const UniversalScaleState& scale) {
-    ResolutionPopupSnapshot& snapshot = resolutionPopupSnapshot;
-    if (!snapshot.owner) {
+Rect scaledStatusSummaryRoot(const PanelSnapshot& snapshot,
+                             const UniversalScaleState& scale,
+                             int rightmostText) {
+    Rect root = scaledRect(snapshot.root, scale);
+    root.left = snapshot.root.left +
+        ((snapshot.root.width - root.width) / 2);
+    root.top = snapshot.root.top +
+        ((snapshot.root.height - root.height) / 2);
+    if (rightmostText > 0) {
+        root.width = rightmostText +
+            scaleContentValue(StatusSummaryRightMargin, scale);
+        root.left = snapshot.root.left +
+            ((snapshot.root.width - root.width) / 2);
+    }
+    return root;
+}
+
+void applyRenderedStatusSummary(const UniversalScaleState& scale) {
+    if (!statusSummaryRendered.owner) {
         return;
     }
 
-    for (DWORD i = 0; i < snapshot.childCount; ++i) {
-        const ControlRectSnapshot& child = snapshot.children[i];
-        callControlSetRect(child.control, scaledRect(child.rect, scale));
+    const int rightmostText =
+        applyStatusSummaryChildren(statusSummaryRendered, scale);
+    const Rect root = scaledStatusSummaryRoot(
+        statusSummaryRendered, scale, rightmostText);
+    callControlSetRect(statusSummaryRendered.owner, root);
+
+    DWORD childrenData = 0;
+    if (!resolveSnapshotChildren(statusSummaryRendered, childrenData)) {
+        return;
     }
-
-    callControlSetRect(snapshot.owner, scaledRect(snapshot.root, scale));
-    snapshot.layoutGeneration = scale.layoutGeneration;
-}
-
-void scaleSkillInfoTooltipControls(char* owner, const UniversalScaleState& scale) {
-    scaleControl(owner + SkillInfoListOffset, scale);
-    scaleControl(owner + SkillInfoTitleOffset, scale);
-    scaleControl(owner + SkillInfoOkButtonOffset, scale);
-
-    for (int index = 0; index < SkillInfoRowCount; ++index) {
-        scaleControl(owner + SkillInfoRowOffset + (SkillInfoRowStride * index), scale);
+    for (DWORD i = 0; i < statusSummaryRendered.childCount; ++i) {
+        DWORD childAddress = 0;
+        if (statusSummaryRendered.children[i].valid &&
+            safeReadDword(reinterpret_cast<const void*>(childrenData +
+                (i * sizeof(DWORD))), childAddress) &&
+            reinterpret_cast<char*>(childAddress) ==
+                statusSummaryRendered.owner + StatusSummaryButtonOffset) {
+            Rect button = statusSummaryRendered.children[i].rect;
+            scaleStatusSummaryButton(reinterpret_cast<char*>(childAddress),
+                button, root, scale);
+            callControlSetRect(reinterpret_cast<char*>(childAddress), button);
+            break;
+        }
     }
-}
-
-bool isStatusSummarySetRectReturn(DWORD returnAddress) {
-    return returnAddress == StatusSummaryRootReturn;
+    statusSummaryRendered.layoutGeneration = scale.layoutGeneration;
 }
 
 }
@@ -305,27 +529,33 @@ void scaleCenteredPopup(void* ownerPtr, DWORD* returnAddressSlot) {
     const UniversalScaleState* scale = ResolutionScale::get();
     char* owner = static_cast<char*>(ownerPtr);
     DWORD returnAddress = 0;
-    if (!owner ||
-        !returnAddressSlot ||
-        !scale ||
+    if (!owner || !returnAddressSlot || !scale ||
         !safeReadDword(returnAddressSlot, returnAddress) ||
         !isCenteredPopupCall(returnAddress)) {
         return;
     }
 
-    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
-    if (!hasUsefulRect(*root)) {
+    PanelSnapshot& snapshot = popupSnapshots[centeredPopupSlot(returnAddress)];
+    if (!capturePanel(snapshot, owner)) {
         return;
     }
 
+    if (returnAddress == ConfirmCenterReturn) {
+        updateFitCeilings(*scale);
+        captureMessageBox(owner);
+    }
     if (returnAddress == SkillInfoCenterReturn) {
-        scaleSkillInfoTooltipControls(owner, *scale);
-        callControlSetRect(owner, scaledRect(*root, *scale));
+        captureSkillInfoRows(owner);
     }
-    else {
-        scalePanelControls(owner, *scale, returnAddress == ConfirmCenterReturn);
-        callControlSetRect(owner, scaledRect(*root, *scale));
+
+    if (returnAddress == ConfirmCenterReturn) {
+        applyMessageBoxIconFillStyle(*scale);
     }
+    applyPanel(snapshot, *scale, AuthoredPosition);
+    if (returnAddress == SkillInfoCenterReturn) {
+        applySkillInfoRows(*scale);
+    }
+    snapshot.layoutGeneration = scale->layoutGeneration;
 }
 
 void scaleLayoutPopup(void* ownerPtr, bool centerHorizontally) {
@@ -335,64 +565,147 @@ void scaleLayoutPopup(void* ownerPtr, bool centerHorizontally) {
         return;
     }
 
-    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
-    if (!hasUsefulRect(*root)) {
+    PanelSnapshot& snapshot = popupSnapshots[
+        centerHorizontally ? BarkPopup : PausePopup];
+    if (!capturePanel(snapshot, owner)) {
         return;
     }
-
-    scalePanelControls(owner, *scale);
-    Rect scaledRoot = scaledRect(*root, *scale);
-    if (centerHorizontally) {
-        scaledRoot.left = (scale->screenWidth - scaledRoot.width) / 2;
-    }
-    callControlSetRect(owner, scaledRoot);
+    applyPanel(snapshot, *scale,
+        centerHorizontally ? CenterHorizontally : AuthoredPosition);
+    snapshot.layoutGeneration = scale->layoutGeneration;
 }
 
 void scaleLateResolutionPopup(void* ownerPtr) {
     const UniversalScaleState* scale = ResolutionScale::get();
     char* owner = static_cast<char*>(ownerPtr);
-    if (!scale || !owner) {
+    PanelSnapshot& snapshot = popupSnapshots[ResolutionPopup];
+    if (!scale || !owner || !capturePanel(snapshot, owner)) {
         return;
     }
-
-    if (!captureResolutionPopup(owner, *scale)) {
-        return;
-    }
-
-    applyResolutionPopupSnapshot(*scale);
+    applyPanel(snapshot, *scale, AuthoredPosition);
+    snapshot.layoutGeneration = scale->layoutGeneration;
 }
 
-void refreshLateResolutionPopup(void* ownerPtr) {
+void captureStatusSummary(void* ownerPtr) {
+    char* owner = static_cast<char*>(ownerPtr);
+    if (owner && capturePanel(statusSummaryBaseline, owner)) {
+        statusSummaryRendered = {};
+    }
+}
+
+void restoreStatusSummary(void* ownerPtr) {
     const UniversalScaleState* scale = ResolutionScale::get();
     char* owner = static_cast<char*>(ownerPtr);
-    if (!scale ||
-        !owner ||
-        resolutionPopupSnapshot.owner != owner ||
-        resolutionPopupSnapshot.layoutGeneration == scale->layoutGeneration) {
+    if (!scale || owner != statusSummaryBaseline.owner) {
         return;
     }
-
-    applyResolutionPopupSnapshot(*scale);
+    applyPanel(statusSummaryBaseline, *scale, AuthoredPosition, true);
 }
 
 void refreshTrackedPopups() {
-    refreshLateResolutionPopup(resolutionPopupSnapshot.owner);
-}
-
-void scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot) {
-    UNREFERENCED_PARAMETER(control);
-
     const UniversalScaleState* scale = ResolutionScale::get();
-    if (!scale || !returnAddressSlot || !rectPointerSlot) {
+    if (!scale) {
         return;
     }
 
+    updateFitCeilings(*scale);
+    for (int i = 0; i < PopupSlotCount; ++i) {
+        PanelSnapshot& snapshot = popupSnapshots[i];
+        if (!snapshot.owner ||
+            snapshot.layoutGeneration == scale->layoutGeneration) {
+            continue;
+        }
+
+        RootPlacement placement = AuthoredPosition;
+        if (i <= DebugAltPopup) {
+            placement = CenterBothAxes;
+        }
+        else if (i == BarkPopup) {
+            placement = CenterHorizontally;
+        }
+        if (i == ConfirmPopup) {
+            applyMessageBoxIconFillStyle(*scale);
+        }
+        applyPanel(snapshot, *scale, placement);
+        if (i == ConfirmPopup) {
+            updateMessageBoxLayoutBases(*scale);
+        }
+        else if (i == SkillInfoPopup) {
+            applySkillInfoRows(*scale);
+        }
+        snapshot.layoutGeneration = scale->layoutGeneration;
+    }
+
+    if (statusSummaryRendered.owner &&
+        statusSummaryRendered.layoutGeneration != scale->layoutGeneration) {
+        applyRenderedStatusSummary(*scale);
+    }
+}
+
+void clearTrackedPopup(void* ownerPtr) {
+    char* owner = static_cast<char*>(ownerPtr);
+    for (int i = 0; i < PopupSlotCount; ++i) {
+        if (popupSnapshots[i].owner == owner) {
+            popupSnapshots[i] = {};
+        }
+    }
+    if (messageBoxSnapshot.owner == owner) {
+        messageBoxSnapshot = {};
+    }
+    if (skillInfoSnapshot.owner == owner) {
+        skillInfoSnapshot = {};
+    }
+    if (statusSummaryBaseline.owner == owner) {
+        statusSummaryBaseline = {};
+        statusSummaryRendered = {};
+    }
+}
+
+void restoreFitCeilings() {
+    writeCodeValue(MessageBoxIconInsetOperand, 32);
+    writeCodeValue(MessageBoxFitWidthOperand1, 440);
+    writeCodeValue(MessageBoxFitHeightOperand1, 280);
+    writeCodeValue(MessageBoxFitWidthOperand2, 440);
+    writeCodeValue(MessageBoxFitHeightOperand2, 280);
+    writeCodeValue(StatusSummaryFitWidthOperand1, 440);
+    writeCodeValue(StatusSummaryFitWidthOperand2, 440);
+    FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
+}
+
+void scaleStatusSummarySetRect(void* controlPtr, DWORD* returnAddressSlot,
+                               DWORD* rectPointerSlot) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    char* owner = static_cast<char*>(controlPtr);
     DWORD returnAddress = 0;
     DWORD rectAddress = 0;
-    if (!safeReadDword(returnAddressSlot, returnAddress) ||
-        !safeReadDword(rectPointerSlot, rectAddress) ||
-        !isStatusSummarySetRectReturn(returnAddress) ||
-        rectAddress == 0) {
+    if (!scale || !owner || owner != statusSummaryBaseline.owner ||
+        !returnAddressSlot || !rectPointerSlot ||
+        !safeReadDword(returnAddressSlot, returnAddress) ||
+        returnAddress != StatusSummaryRootReturn ||
+        !safeReadDword(rectPointerSlot, rectAddress) || rectAddress == 0 ||
+        !hasUsefulRect(*reinterpret_cast<Rect*>(rectAddress)) ||
+        !capturePanel(statusSummaryRendered, owner)) {
+        return;
+    }
+
+    Rect* rect = reinterpret_cast<Rect*>(rectAddress);
+    statusSummaryRendered.root = *rect;
+    const int rightmostText =
+        applyStatusSummaryChildren(statusSummaryRendered, *scale);
+    *rect = scaledStatusSummaryRoot(
+        statusSummaryRendered, *scale, rightmostText);
+    statusSummaryRendered.layoutGeneration = scale->layoutGeneration;
+}
+
+void scaleMessageBoxButtonSetRect(void* controlPtr, DWORD* returnAddressSlot,
+                                  DWORD* rectPointerSlot) {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    char* control = static_cast<char*>(controlPtr);
+    DWORD returnAddress = 0;
+    DWORD rectAddress = 0;
+    if (!scale || !control || !returnAddressSlot || !rectPointerSlot ||
+        !safeReadDword(returnAddressSlot, returnAddress) ||
+        !safeReadDword(rectPointerSlot, rectAddress) || rectAddress == 0) {
         return;
     }
 
@@ -401,52 +714,66 @@ void scaleStatusSummarySetRect(void* control, DWORD* returnAddressSlot, DWORD* r
         return;
     }
 
-    // FUN_00625C60 derives the root from measured text. Scale those calculated
-    // dimensions responsively while preserving the center chosen by the game.
-    if (returnAddress == StatusSummaryRootReturn) {
-        *rect = scaledCenteredRect(*rect, *scale);
+    if (returnAddress == StatusSummaryButtonReturn &&
+        statusSummaryRendered.owner &&
+        control == statusSummaryRendered.owner + StatusSummaryButtonOffset) {
+        DWORD childrenData = 0;
+        if (resolveSnapshotChildren(statusSummaryRendered, childrenData)) {
+            for (DWORD i = 0; i < statusSummaryRendered.childCount; ++i) {
+                DWORD childAddress = 0;
+                if (safeReadDword(reinterpret_cast<const void*>(childrenData +
+                        (i * sizeof(DWORD))), childAddress) &&
+                    reinterpret_cast<char*>(childAddress) == control) {
+                    statusSummaryRendered.children[i].rect = *rect;
+                    statusSummaryRendered.children[i].valid = true;
+                    break;
+                }
+            }
+        }
+        Rect root = *reinterpret_cast<Rect*>(
+            statusSummaryRendered.owner + sizeof(DWORD));
+        scaleStatusSummaryButton(control, *rect, root, *scale);
         return;
     }
 
-}
-
-void scaleMessageBoxButtonSetRect(void* control, DWORD* returnAddressSlot, DWORD* rectPointerSlot) {
-    const UniversalScaleState* scale = ResolutionScale::get();
-    DWORD returnAddress = 0;
-    DWORD rectAddress = 0;
-    if (!scale ||
-        !returnAddressSlot ||
-        !rectPointerSlot ||
-        !safeReadDword(returnAddressSlot, returnAddress) ||
-        !safeReadDword(rectPointerSlot, rectAddress) ||
-        rectAddress == 0) {
+    if (!isMessageBoxButtonSetExtentReturn(returnAddress)) {
         return;
     }
 
-    Rect* rect = reinterpret_cast<Rect*>(rectAddress);
-    if (returnAddress == StatusSummaryLowerReturn &&
-        hasUsefulRect(*rect)) {
-        scaleStatusButton(static_cast<char*>(control), *rect, *scale);
+    char* owner = messageBoxOwnerFromButton(control, returnAddress);
+    if (owner != messageBoxSnapshot.owner) {
         return;
     }
 
-    if (isMessageBoxButtonSetExtentReturn(returnAddress) &&
-        hasUsefulRect(*rect)) {
-        const int centerX = rect->left + (rect->width / 2);
-        rect->width = scaledMessageBoxButtonWidth(
-            static_cast<char*>(control), *rect, returnAddress, *scale);
-        rect->left = centerX - (rect->width / 2);
+    const Rect& baseline = returnAddress == MessageBoxOkButtonFinalReturn ?
+        messageBoxSnapshot.okButton : messageBoxSnapshot.cancelButton;
+    const bool baselineValid = returnAddress == MessageBoxOkButtonFinalReturn ?
+        messageBoxSnapshot.okButtonValid : messageBoxSnapshot.cancelButtonValid;
+    if (!baselineValid) {
+        return;
     }
+
+    const int centerX = rect->left + (rect->width / 2);
+    int width = scaleContentValue(baseline.width, *scale);
+    Rect* root = reinterpret_cast<Rect*>(owner + sizeof(DWORD));
+    const int margin = rect->left > 0 ? rect->left : 0;
+    const int maxWidth = root->width - (margin * 2);
+    if (maxWidth > 0 && width > maxWidth) {
+        width = maxWidth;
+    }
+    rect->width = width;
+    rect->left = centerX - (width / 2);
 }
 
 void scaleMessageBoxAfterFix(void* ownerPtr) {
     const UniversalScaleState* scale = ResolutionScale::get();
     char* owner = static_cast<char*>(ownerPtr);
-    if (!scale || !owner) {
+    if (!scale || owner != messageBoxSnapshot.owner ||
+        !messageBoxSnapshot.frameValid) {
         return;
     }
-
-    scaleMessageBoxFrameControl(owner, *scale);
+    callControlSetRect(owner + MessageBoxFrameOffset,
+        scaledRect(messageBoxSnapshot.frame, *scale));
 }
 
 }

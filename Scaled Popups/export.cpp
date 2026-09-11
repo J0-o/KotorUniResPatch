@@ -33,9 +33,25 @@ extern "C" void __cdecl scaleLateResolutionPopup(void* owner) {
     }
 }
 
-extern "C" void __cdecl refreshLateResolutionPopup(void* owner) {
+extern "C" void __cdecl captureStatusSummary(void* owner) {
     __try {
-        PopupDialogScaleTest::refreshLateResolutionPopup(owner);
+        PopupDialogScaleTest::captureStatusSummary(owner);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
+extern "C" void __cdecl restoreStatusSummary(void* owner) {
+    __try {
+        PopupDialogScaleTest::restoreStatusSummary(owner);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
+extern "C" void __cdecl clearTrackedPopup(void* owner) {
+    __try {
+        PopupDialogScaleTest::clearTrackedPopup(owner);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
@@ -78,9 +94,11 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     UNREFERENCED_PARAMETER(reserved);
     if (reason == DLL_PROCESS_ATTACH) {
         ResolutionScale::subscribe(refreshResolutionDependentUi);
+        refreshResolutionDependentUi();
     }
     else if (reason == DLL_PROCESS_DETACH) {
         ResolutionScale::unsubscribe(refreshResolutionDependentUi);
+        PopupDialogScaleTest::restoreFitCeilings();
     }
     return TRUE;
 }

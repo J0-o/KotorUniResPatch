@@ -1,16 +1,16 @@
 #include "font_scale_2x.h"
 
-extern "C" void __cdecl scaleFontBeforeTextOut(void* font) {
+extern "C" void __cdecl scaleLoadedTextureMetadata(void* textureMetadata) {
     __try {
-        FontScale2x::scaleFontBeforeTextOut(font);
+        FontScale2x::scaleLoadedTextureMetadata(textureMetadata);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
 }
 
-extern "C" void __cdecl scaleGuiStringBeforeDraw(void* guiString) {
+extern "C" void __cdecl scaleResetGuiStringFont(void* guiString) {
     __try {
-        FontScale2x::scaleGuiStringBeforeDraw(guiString);
+        FontScale2x::scaleResetGuiStringFont(guiString);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
@@ -22,11 +22,4 @@ extern "C" void __cdecl refreshResolutionDependentUi() {
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
-}
-
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
-    UNREFERENCED_PARAMETER(instance);
-    UNREFERENCED_PARAMETER(reason);
-    UNREFERENCED_PARAMETER(reserved);
-    return TRUE;
 }

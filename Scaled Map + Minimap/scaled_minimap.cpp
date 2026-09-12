@@ -32,7 +32,6 @@ constexpr int ArrowLeft = 47;
 constexpr int ArrowTop = 49;
 constexpr int ArrowSize = 32;
 
-bool g_drawActive = false;
 float g_areaMapViewportWidthBeforeGrid = AreaMapViewportWidth;
 float g_areaMapViewportHeightBeforeGrid = AreaMapViewportHeight;
 bool g_haveAreaMapViewportBeforeGrid = false;
@@ -162,7 +161,7 @@ bool scaleKnownHudMinimapRect(Rect* rect, const UniversalScaleState& scale) {
         rect->left = scaleMinimapValue(MapViewLeft, scale);
         rect->top = scaleMinimapValue(MapViewTop, scale);
         rect->width = MinimapTextureSize;
-        rect->height = MinimapTextureSize;
+        rect->height = MinimapAtlasHalfHeight;
         return true;
     }
 
@@ -234,8 +233,6 @@ void prepareHudMinimapScale(void* hud, int* mapX, int* mapY, int* rectWidth, int
         return;
     }
 
-    g_drawActive = true;
-
     if (mapX) {
         *mapX = unscaleUiValueToBase(
             *mapX, BaseHeight, UiBaseHeight, *scale);
@@ -274,7 +271,7 @@ void zoomHudMinimapImageDraw(void* image, int* x, int* y, int* width, int* heigh
     const UniversalScaleState* scale = ResolutionScale::get();
     if (!scale || isNativeScale(*scale) ||
         !x || !y || !width || !height ||
-        (!g_drawActive && !isMinimapViewportActive(*scale))) {
+        !isMinimapViewportActive(*scale)) {
         return;
     }
 
@@ -299,8 +296,6 @@ void beginHudMinimapGridZoom(void* hud, Rect* rect) {
     if (!hud || !rect || !scale || isNativeScale(*scale)) {
         return;
     }
-
-    g_drawActive = true;
 
     const bool readWidth = safeReadFloat(
         reinterpret_cast<const void*>(AreaMapViewportWidthAddress),
@@ -333,7 +328,6 @@ void endHudMinimapGridZoom(void* hud) {
 
     const UniversalScaleState* scale = ResolutionScale::get();
     if (!hud || !scale || isNativeScale(*scale)) {
-        g_drawActive = false;
         return;
     }
 
@@ -341,7 +335,6 @@ void endHudMinimapGridZoom(void* hud) {
     char* base = static_cast<char*>(hud);
     writeMemory(base + 0x6088, &viewportSize, sizeof(viewportSize));
     writeMemory(base + 0x608C, &viewportSize, sizeof(viewportSize));
-    g_drawActive = false;
 }
 
 }

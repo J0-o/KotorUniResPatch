@@ -5,60 +5,79 @@
 namespace {
 
 constexpr DWORD ScrollbarWidthOffset = 0x110;
+constexpr DWORD GuiManagerPointerAddress = 0x007A39F4;
+constexpr DWORD GuiManagerPanelsOffset = 0x88;
+constexpr DWORD GuiManagerPanelCountOffset = 0x8C;
+constexpr DWORD PanelChildrenOffset = 0x20;
+constexpr DWORD PanelChildCountOffset = 0x24;
+constexpr DWORD ListboxSetExtentAddress = 0x0041BF80;
 constexpr int BaseScrollbarWidth = 16;
-constexpr int MaxTrackedListboxes = 512;
+constexpr DWORD MaximumPanelCount = 256;
+constexpr DWORD MaximumChildCount = 1024;
 
-struct TrackedListbox {
-    void* object;
-    DWORD vtable;
-};
-
-TrackedListbox trackedListboxes[MaxTrackedListboxes] = {};
-
-void rememberListbox(void* object) {
+bool safeReadDword(const void* address, DWORD& value) {
     __try {
-        const DWORD vtable = *reinterpret_cast<DWORD*>(object);
-        for (TrackedListbox& tracked : trackedListboxes) {
-            if (tracked.object == object) {
-                tracked.vtable = vtable;
-                return;
-            }
-            if (!tracked.object) {
-                tracked = { object, vtable };
-                return;
-            }
-        }
+        value = *reinterpret_cast<const DWORD*>(address);
+        return true;
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
+        value = 0;
+        return false;
     }
 }
 
-void applyScrollbarWidth(void* listbox, const UniversalScaleState& scale) {
+void applyScrollbarWidth(void* listbox, int scaledWidth) {
     char* object = static_cast<char*>(listbox);
     int* width = reinterpret_cast<int*>(object + ScrollbarWidthOffset);
     if (*width != 0) {
-        *width = scaleUiValue(BaseScrollbarWidth, scale);
+        *width = scaledWidth;
     }
 }
 
-void __cdecl refreshTrackedScrollbars() {
+bool isListbox(void* control) {
+    DWORD vtable = 0;
+    DWORD setExtent = 0;
+    return safeReadDword(control, vtable) && vtable != 0 &&
+        safeReadDword(reinterpret_cast<const void*>(vtable + 4), setExtent) &&
+        setExtent == ListboxSetExtentAddress;
+}
+
+void __cdecl refreshLiveScrollbars() {
     const UniversalScaleState* scale = ResolutionScale::get();
     if (!scale) {
         return;
     }
-    for (TrackedListbox& tracked : trackedListboxes) {
-        if (!tracked.object) {
+
+    DWORD guiManager = 0;
+    DWORD panels = 0;
+    DWORD panelCount = 0;
+    if (!safeReadDword(reinterpret_cast<const void*>(GuiManagerPointerAddress), guiManager) ||
+        guiManager == 0 ||
+        !safeReadDword(reinterpret_cast<const void*>(guiManager + GuiManagerPanelsOffset), panels) ||
+        !safeReadDword(reinterpret_cast<const void*>(guiManager + GuiManagerPanelCountOffset), panelCount) ||
+        panels == 0 || panelCount > MaximumPanelCount) {
+        return;
+    }
+
+    const int scaledWidth = scaleUiValue(BaseScrollbarWidth, *scale);
+    for (DWORD panelIndex = 0; panelIndex < panelCount; ++panelIndex) {
+        DWORD panel = 0;
+        DWORD children = 0;
+        DWORD childCount = 0;
+        if (!safeReadDword(reinterpret_cast<const void*>(panels + panelIndex * sizeof(DWORD)), panel) ||
+            panel == 0 ||
+            !safeReadDword(reinterpret_cast<const void*>(panel + PanelChildrenOffset), children) ||
+            !safeReadDword(reinterpret_cast<const void*>(panel + PanelChildCountOffset), childCount) ||
+            children == 0 || childCount > MaximumChildCount) {
             continue;
         }
-        __try {
-            if (*reinterpret_cast<DWORD*>(tracked.object) != tracked.vtable) {
-                tracked = {};
-                continue;
+
+        for (DWORD childIndex = 0; childIndex < childCount; ++childIndex) {
+            DWORD child = 0;
+            if (safeReadDword(reinterpret_cast<const void*>(children + childIndex * sizeof(DWORD)), child) &&
+                child != 0 && isListbox(reinterpret_cast<void*>(child))) {
+                applyScrollbarWidth(reinterpret_cast<void*>(child), scaledWidth);
             }
-            applyScrollbarWidth(tracked.object, *scale);
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER) {
-            tracked = {};
         }
     }
 }
@@ -72,15 +91,14 @@ extern "C" void __cdecl scaleScrollbarWidth(void* listboxPtr) {
     }
 
     __try {
-        rememberListbox(listboxPtr);
-        applyScrollbarWidth(listboxPtr, *scale);
+        applyScrollbarWidth(listboxPtr, scaleUiValue(BaseScrollbarWidth, *scale));
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
 }
 
 extern "C" void __cdecl refreshResolutionDependentUi() {
-    refreshTrackedScrollbars();
+    refreshLiveScrollbars();
 }
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {

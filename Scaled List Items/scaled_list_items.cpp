@@ -11,23 +11,17 @@ constexpr DWORD QuantityWidthLongAddress = 0x006B533C;
 constexpr DWORD QuantityTopAddress = 0x006B5351;
 constexpr DWORD SkillVisualHeightAddress = 0x006AB8EF;
 
-bool writeMemory(void* address, const void* value, size_t size) {
-    __try {
-        DWORD oldProtect = 0;
-        if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-            return false;
-        }
-
-        CopyMemory(address, value, size);
-        FlushInstructionCache(GetCurrentProcess(), address, size);
-
-        DWORD ignored = 0;
-        VirtualProtect(address, size, oldProtect, &ignored);
-        return true;
+void writeMemory(void* address, const void* value, size_t size) {
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        return;
     }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+
+    CopyMemory(address, value, size);
+    FlushInstructionCache(GetCurrentProcess(), address, size);
+
+    DWORD ignored = 0;
+    VirtualProtect(address, size, oldProtect, &ignored);
 }
 
 void writeInt(DWORD address, int value) {
@@ -106,59 +100,29 @@ extern "C" void __cdecl setFeatGroupRowHeight(void* heightSlot) {
     writeStackValue(heightSlot, 0x28, *scale);
 }
 
-extern "C" void __cdecl setFeatStoredExtent(void* sourceRect,
-                                              void* destinationOwner) {
+extern "C" void __cdecl setFeatStoredHeight(void* destinationRect) {
     const UniversalScaleState* scale = getScale();
-    if (!sourceRect || !destinationOwner || !scale) {
+    if (!scale) {
         return;
     }
 
-    __try {
-        int* source = static_cast<int*>(sourceRect);
-        int* destination = reinterpret_cast<int*>(
-            static_cast<char*>(destinationOwner) + 0x04);
-        destination[0] = source[0];
-        destination[1] = source[1];
-
-        char* widthCursor = reinterpret_cast<char*>(destination + 2);
-        destination[2] =
-            *reinterpret_cast<int*>(widthCursor + 0x2A4) +
-            *reinterpret_cast<int*>(widthCursor + 0x2AC);
-        destination[3] = adjustedValue(0x28, *scale);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-    }
+    *reinterpret_cast<int*>(static_cast<char*>(destinationRect) + 0x0C) =
+        adjustedValue(0x28, *scale);
 }
 
 extern "C" void __cdecl setGenericListRowHeight(void* sourceRect,
                                                   void* destinationRect) {
     const UniversalScaleState* scale = getScale();
-    if (!sourceRect || !destinationRect || !scale) {
+    if (!scale) {
         return;
     }
 
-    __try {
-        const int sourceHeight = *reinterpret_cast<int*>(
-            static_cast<char*>(sourceRect) + 0x0C);
-        *reinterpret_cast<int*>(static_cast<char*>(destinationRect) + 0x0C) =
-            adjustedValue(sourceHeight, *scale);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-    }
+    const int sourceHeight = *reinterpret_cast<int*>(
+        static_cast<char*>(sourceRect) + 0x0C);
+    *reinterpret_cast<int*>(static_cast<char*>(destinationRect) + 0x0C) =
+        adjustedValue(sourceHeight, *scale);
 }
 
 extern "C" void __cdecl refreshResolutionDependentUi() {
     refreshPatchedListConstants();
-}
-
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
-    UNREFERENCED_PARAMETER(instance);
-    UNREFERENCED_PARAMETER(reserved);
-    if (reason == DLL_PROCESS_ATTACH) {
-        ResolutionScale::subscribe(refreshResolutionDependentUi);
-    }
-    else if (reason == DLL_PROCESS_DETACH) {
-        ResolutionScale::unsubscribe(refreshResolutionDependentUi);
-    }
-    return TRUE;
 }

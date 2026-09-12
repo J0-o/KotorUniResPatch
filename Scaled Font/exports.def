@@ -1,5 +1,5 @@
 LIBRARY FontScale2x
 EXPORTS
-    scaleFontBeforeTextOut
-    scaleGuiStringBeforeDraw
+    scaleLoadedTextureMetadata
+    scaleResetGuiStringFont
     refreshResolutionDependentUi

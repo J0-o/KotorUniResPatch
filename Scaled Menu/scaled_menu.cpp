@@ -8,6 +8,9 @@ namespace {
 constexpr int BaseWidth = 800;
 constexpr int BaseHeight = 600;
 constexpr DWORD MainInterfaceAddress = 0x00833BB4;
+constexpr DWORD GuiManagerPointerAddress = 0x007A39F4;
+constexpr DWORD GuiManagerPanelsOffset = 0x88;
+constexpr DWORD GuiManagerPanelCountOffset = 0x8C;
 constexpr DWORD MainMenuVtable = 0x00752F70;
 constexpr DWORD FadePanelVtable = 0x0074FC60;
 constexpr DWORD TooltipPanelVtable = 0x00750030;
@@ -16,8 +19,6 @@ constexpr DWORD PazaakOpponentHandBase = 0x564C;
 constexpr DWORD PazaakCardStride = 0x31C;
 constexpr DWORD PazaakCardLabelOffset = 0x1C4;
 constexpr DWORD PazaakCardFaceDrawModeOffset = 0x9C;
-constexpr int MaxTrackedPanels = 64;
-constexpr int MaxSnapshotChildren = 256;
 
 struct ScaleState {
     int baseWidth;
@@ -33,23 +34,6 @@ struct PazaakCardRect {
     Rect button;
     Rect label;
 };
-
-struct ControlSnapshot {
-    char* control;
-    Rect rect;
-};
-
-struct PanelSnapshot {
-    char* panel;
-    DWORD vtable;
-    Rect root;
-    ControlSnapshot children[MaxSnapshotChildren];
-    DWORD childCount;
-    bool valid;
-};
-
-PanelSnapshot trackedPanels[MaxTrackedPanels] = {};
-void* livePazaakGame = nullptr;
 
 constexpr PazaakCardRect PazaakHandCards[] = {
     { PazaakPlayerHandBase + (PazaakCardStride * 0), { 94, 425, 80, 80 }, { 109, 433, 50, 50 } },
@@ -112,10 +96,14 @@ bool isFourByThreeRoot(const Rect& rect) {
 }
 
 bool isTopTabRoot(const Rect& rect) {
-    return rect.left == 0 &&
-        rect.top == 0 &&
-        rect.width == 640 &&
-        rect.height == 86;
+    if (rect.left != 0 || rect.top != 0 || rect.width < 640) {
+        return false;
+    }
+
+    const long long difference =
+        static_cast<long long>(rect.height) * 640 -
+        static_cast<long long>(rect.width) * 86;
+    return difference >= -640 && difference <= 640;
 }
 
 bool isMainInterfacePanel(void* panel) {
@@ -254,13 +242,14 @@ bool makeScaleForPanel(void* panel, const Rect& original,
                        const UniversalScaleState& universalScale,
                        ScaleState& scale) {
     if (isMainMenuPanel(panel) && original.left == 0 && original.top == 0 &&
-        original.width == BaseWidth && original.height == BaseHeight) {
+        hasUsefulRect(original)) {
         scale = makeFullscreenMenuScale(
             original.width, original.height, universalScale);
         return true;
     }
     if (isTopTabRoot(original)) {
-        scale = makeMenuScale(640, 480, universalScale);
+        scale = makeMenuScale(
+            original.width, (original.width * 3) / 4, universalScale);
         return true;
     }
     if (isFourByThreeRoot(original)) {
@@ -270,84 +259,38 @@ bool makeScaleForPanel(void* panel, const Rect& original,
     return false;
 }
 
-PanelSnapshot* capturePanel(char* panel, DWORD vtable, const Rect& root) {
-    PanelSnapshot* snapshot = nullptr;
-    for (PanelSnapshot& candidate : trackedPanels) {
-        if (candidate.valid && candidate.panel == panel) {
-            snapshot = &candidate;
-            break;
-        }
-        if (!snapshot && !candidate.valid) {
-            snapshot = &candidate;
-        }
-    }
-    if (!snapshot) {
-        return nullptr;
-    }
-
-    *snapshot = {};
-    snapshot->panel = panel;
-    snapshot->vtable = vtable;
-    snapshot->root = root;
-    snapshot->valid = true;
-
-    DWORD childrenData = 0;
-    DWORD childrenSize = 0;
-    if (!safeReadDword(panel + 0x20, childrenData) ||
-        !safeReadDword(panel + 0x24, childrenSize) ||
-        childrenSize > MaxSnapshotChildren) {
-        return snapshot;
-    }
-    for (DWORD i = 0; i < childrenSize; ++i) {
-        DWORD childValue = 0;
-        if (!safeReadDword(reinterpret_cast<void*>(childrenData + i * sizeof(DWORD)),
-                           childValue) || childValue == 0) {
-            continue;
-        }
-        char* child = reinterpret_cast<char*>(childValue);
-        __try {
-            Rect childRect = *reinterpret_cast<Rect*>(child + 0x04);
-            if (hasUsefulRect(childRect)) {
-                snapshot->children[snapshot->childCount++] = { child, childRect };
-            }
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER) {
-        }
-    }
-    return snapshot;
-}
-
-void applyPanelSnapshot(PanelSnapshot& snapshot,
-                        const UniversalScaleState& universalScale) {
-    if (!snapshot.valid) {
-        return;
-    }
-    DWORD vtable = 0;
-    if (!safeReadDword(snapshot.panel, vtable) || vtable != snapshot.vtable) {
-        snapshot = {};
-        return;
-    }
-
+void scalePanelTree(char* panel, DWORD vtable, const Rect& root,
+                    const UniversalScaleState& universalScale) {
     if (vtable == FadePanelVtable) {
         const Rect fullscreen = {
             0, 0, universalScale.screenWidth, universalScale.screenHeight,
         };
-        callControlSetRect(snapshot.panel, fullscreen);
+        callControlSetRect(panel, fullscreen);
         return;
     }
 
     ScaleState scale = {};
-    if (!makeScaleForPanel(snapshot.panel, snapshot.root,
-                           universalScale, scale)) {
+    if (!makeScaleForPanel(panel, root, universalScale, scale)) {
         return;
     }
     patchCenteringConstants(scale.targetWidth, scale.targetHeight);
-    const Rect scaledRoot = scaledRect(snapshot.root, scale);
-    callControlSetRect(snapshot.panel, scaledRoot);
-    scalePanelBorder(snapshot.panel, scaledRoot);
-    for (DWORD i = 0; i < snapshot.childCount; ++i) {
-        callControlSetRect(snapshot.children[i].control,
-            scaledRect(snapshot.children[i].rect, scale));
+    const Rect scaledRoot = scaledRect(root, scale);
+    callControlSetRect(panel, scaledRoot);
+    scalePanelBorder(panel, scaledRoot);
+
+    DWORD childrenData = 0;
+    DWORD childrenSize = 0;
+    if (!safeReadDword(panel + 0x20, childrenData) ||
+        !safeReadDword(panel + 0x24, childrenSize)) {
+        return;
+    }
+    for (DWORD i = 0; i < childrenSize; ++i) {
+        DWORD child = 0;
+        if (safeReadDword(
+                reinterpret_cast<void*>(childrenData + i * sizeof(DWORD)),
+                child)) {
+            scaleControl(reinterpret_cast<char*>(child), scale);
+        }
     }
 }
 
@@ -382,11 +325,7 @@ void scaleMenuPanelTree(void* panel) {
         !makeScaleForPanel(panel, original, *universalScale, ignored)) {
         return;
     }
-    PanelSnapshot* snapshot = capturePanel(
-        static_cast<char*>(panel), vtable, original);
-    if (snapshot) {
-        applyPanelSnapshot(*snapshot, *universalScale);
-    }
+    scalePanelTree(static_cast<char*>(panel), vtable, original, *universalScale);
 }
 
 void scalePazaakGameCards(void* pazaakGame) {
@@ -394,8 +333,6 @@ void scalePazaakGameCards(void* pazaakGame) {
     if (!pazaakGame || !universalScale) {
         return;
     }
-
-    livePazaakGame = pazaakGame;
 
     const ScaleState scale = makeMenuScale(
         BaseWidth, BaseHeight, *universalScale);
@@ -411,11 +348,24 @@ void refreshMenuPanelTrees() {
         return;
     }
     patchCenteringConstants(universalScale->uiWidth, universalScale->uiHeight);
-    for (PanelSnapshot& panel : trackedPanels) {
-        applyPanelSnapshot(panel, *universalScale);
+
+    DWORD guiManager = 0;
+    DWORD panels = 0;
+    DWORD panelCount = 0;
+    if (!safeReadDword(reinterpret_cast<const void*>(GuiManagerPointerAddress), guiManager) ||
+        guiManager == 0 ||
+        !safeReadDword(reinterpret_cast<const void*>(guiManager + GuiManagerPanelsOffset), panels) ||
+        !safeReadDword(reinterpret_cast<const void*>(guiManager + GuiManagerPanelCountOffset), panelCount) ||
+        panels == 0 || panelCount > 256) {
+        return;
     }
-    if (livePazaakGame) {
-        scalePazaakGameCards(livePazaakGame);
+
+    for (DWORD i = 0; i < panelCount; ++i) {
+        DWORD panel = 0;
+        if (safeReadDword(reinterpret_cast<const void*>(panels + i * sizeof(DWORD)), panel) &&
+            panel != 0) {
+            scaleMenuPanelTree(reinterpret_cast<void*>(panel));
+        }
     }
 }
 

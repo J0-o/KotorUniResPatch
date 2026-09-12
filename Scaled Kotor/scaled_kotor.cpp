@@ -5,7 +5,6 @@
 
 #include "GameAPI/CExoIni.h"
 #include "GameAPI/CExoString.h"
-#include "GameAPI/CSWGuiManager.h"
 #include "GameAPI/GameVersion.h"
 #include "resolution_scale.h"
 
@@ -63,7 +62,6 @@ constexpr const char* RefreshModuleNames[] = {
     "class-selection-layout-constants-test-v1.dll",
     "small-root-panel-scale-test-v1.dll",
     "scaled-scrollbars-v1.dll",
-    "scaled-menu-borders.dll",
     "area-map-hud-minimap-2x-scale-v1.dll",
     "list-item-height-2x-v1.dll",
 };
@@ -445,8 +443,6 @@ extern "C" void __cdecl onResolutionModeCommitted(void* guiInGame) {
     // callbacks publishes a new layout generation before the setter returns.
     updateScaleState();
     invokeRefreshCallback(findKnownRefreshCallback(FontRefreshModuleName));
-    CSWGuiManager guiManager;
-    guiManager.UpdateAllFonts();
     refreshAdditionalNativeGuiRoots(guiInGame);
     notifyResolutionRefreshCallbacks();
 }

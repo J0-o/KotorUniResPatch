@@ -5,23 +5,25 @@ namespace FontScale2x {
 
 namespace {
 
-constexpr DWORD FontInfoOffset = 0x18;
+constexpr DWORD FontInfoOffset = 0x38;
 constexpr DWORD FontHeightOffset = 0x04;
 constexpr DWORD BaselineHeightOffset = 0x08;
 constexpr DWORD TextureWidthOffset = 0x0C;
 constexpr DWORD SpacingROffset = 0x10;
 constexpr DWORD SpacingBOffset = 0x14;
-constexpr DWORD GuiStringFontTextureOffset = 0x18;
-constexpr DWORD SafePointerGetFontInfoVtableOffset = 0x38;
-constexpr int MaxTrackedFontInfos = 64;
+constexpr DWORD GuiManagerPointerAddress = 0x007A39F4;
+constexpr DWORD GuiStringTextObjectOffset = 0x50;
+constexpr DWORD TextObjectRenderableOffset = 0x14;
+constexpr DWORD RenderableTextureWrapperOffset = 0x18;
+constexpr DWORD GetFontInfoAddress = 0x0041EFA0;
+constexpr DWORD UpdateAllFontsAddress = 0x0040B420;
+constexpr DWORD MaxFontsPerRefresh = 64;
 
-struct TrackedFontInfo {
-    void* object;
-    float metrics[5];
-};
-
-TrackedFontInfo g_trackedFontInfos[MaxTrackedFontInfos] = {};
-int g_trackedFontInfoCount = 0;
+float g_appliedScale = 0.0f;
+float g_refreshAdjustment = 1.0f;
+bool g_refreshInProgress = false;
+void* g_scaledFonts[MaxFontsPerRefresh] = {};
+DWORD g_scaledFontCount = 0;
 
 bool safeReadDword(const void* address, DWORD& value) {
     __try {
@@ -45,38 +47,12 @@ bool safeReadFloat(const void* address, float& value) {
     }
 }
 
-TrackedFontInfo* findTracked(void* fontInfo) {
-    for (int i = 0; i < g_trackedFontInfoCount; ++i) {
-        if (g_trackedFontInfos[i].object == fontInfo) {
-            return &g_trackedFontInfos[i];
-        }
-    }
-
-    return nullptr;
-}
-
-TrackedFontInfo* rememberBaseMetrics(char* fontInfo) {
-    if (g_trackedFontInfoCount >= MaxTrackedFontInfos) {
-        return nullptr;
-    }
-
-    TrackedFontInfo& tracked = g_trackedFontInfos[g_trackedFontInfoCount++];
-    tracked.object = fontInfo;
-    const DWORD offsets[] = {
-        FontHeightOffset, BaselineHeightOffset, TextureWidthOffset,
-        SpacingROffset, SpacingBOffset,
-    };
-    for (int i = 0; i < 5; ++i) {
-        tracked.metrics[i] = *reinterpret_cast<float*>(fontInfo + offsets[i]);
-    }
-    return &tracked;
-}
-
 bool hasSaneFontMetrics(char* fontInfo) {
     float fontHeight = 0.0f;
     float baselineHeight = 0.0f;
     float textureWidth = 0.0f;
-    return safeReadFloat(fontInfo + FontHeightOffset, fontHeight) &&
+    return fontInfo &&
+        safeReadFloat(fontInfo + FontHeightOffset, fontHeight) &&
         safeReadFloat(fontInfo + BaselineHeightOffset, baselineHeight) &&
         safeReadFloat(fontInfo + TextureWidthOffset, textureWidth) &&
         fontHeight > 0.0f && fontHeight < 512.0f &&
@@ -84,90 +60,145 @@ bool hasSaneFontMetrics(char* fontInfo) {
         textureWidth > 0.0f && textureWidth < 4096.0f;
 }
 
-void scaleFontInfo(void* fontInfoPtr, const UniversalScaleState& universalScale) {
-    if (!fontInfoPtr) {
+void multiplyFontInfo(void* fontInfoPtr, float scale) {
+    if (!fontInfoPtr || scale <= 0.0f) {
         return;
     }
 
     __try {
         char* fontInfo = static_cast<char*>(fontInfoPtr);
-        TrackedFontInfo* tracked = findTracked(fontInfoPtr);
-        if (!tracked && hasSaneFontMetrics(fontInfo)) {
-            tracked = rememberBaseMetrics(fontInfo);
-        }
-        if (!tracked) {
+        if (!hasSaneFontMetrics(fontInfo)) {
             return;
         }
 
-        const float scale = twoXScaleAdjustment(universalScale);
         const DWORD offsets[] = {
             FontHeightOffset, BaselineHeightOffset, TextureWidthOffset,
             SpacingROffset, SpacingBOffset,
         };
-        for (int i = 0; i < 5; ++i) {
-            *reinterpret_cast<float*>(fontInfo + offsets[i]) =
-                tracked->metrics[i] * scale;
+        for (DWORD offset : offsets) {
+            *reinterpret_cast<float*>(fontInfo + offset) *= scale;
         }
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
 }
 
-void* fontInfoFromGuiString(void* guiStringPtr) {
-    char* guiString = static_cast<char*>(guiStringPtr);
-    DWORD fontTextureSafePointer = 0;
-    if (!safeReadDword(guiString + GuiStringFontTextureOffset, fontTextureSafePointer) ||
-        fontTextureSafePointer == 0) {
-        return nullptr;
-    }
-
-    __try {
-        DWORD vtable = *reinterpret_cast<DWORD*>(fontTextureSafePointer);
-        DWORD getFontInfo = *reinterpret_cast<DWORD*>(vtable + SafePointerGetFontInfoVtableOffset);
-        if (getFontInfo == 0) {
-            return nullptr;
-        }
-
-        typedef void* (__thiscall *GetFontInfoFn)(void*);
-        return reinterpret_cast<GetFontInfoFn>(getFontInfo)(reinterpret_cast<void*>(fontTextureSafePointer));
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        return nullptr;
-    }
-}
-
-}
-
-void scaleFontBeforeTextOut(void* font) {
-    const UniversalScaleState* scale = ResolutionScale::get();
-    if (!font || !scale) {
-        return;
-    }
-
+void* fontInfoFromTexture(void* texture) {
     DWORD fontInfo = 0;
-    if (safeReadDword(static_cast<char*>(font) + FontInfoOffset, fontInfo) && fontInfo != 0) {
-        scaleFontInfo(reinterpret_cast<void*>(fontInfo), *scale);
-    }
-}
-
-void scaleGuiStringBeforeDraw(void* guiString) {
-    const UniversalScaleState* scale = ResolutionScale::get();
-    if (!guiString || !scale) {
-        return;
+    if (!texture ||
+        !safeReadDword(static_cast<char*>(texture) + FontInfoOffset, fontInfo)) {
+        return nullptr;
     }
 
-    scaleFontInfo(fontInfoFromGuiString(guiString), *scale);
+    return reinterpret_cast<void*>(fontInfo);
 }
 
-void refreshResolutionDependentUi() {
+void* fontInfoFromGuiString(void* guiString) {
+    if (!guiString) {
+        return nullptr;
+    }
+
+    DWORD textObject = 0;
+    DWORD renderable = 0;
+    DWORD textureWrapper = 0;
+    if (!safeReadDword(
+            static_cast<char*>(guiString) + GuiStringTextObjectOffset,
+            textObject) ||
+        !safeReadDword(
+            reinterpret_cast<char*>(textObject) + TextObjectRenderableOffset,
+            renderable) ||
+        !safeReadDword(
+            reinterpret_cast<char*>(renderable) + RenderableTextureWrapperOffset,
+            textureWrapper) ||
+        textureWrapper == 0) {
+        return nullptr;
+    }
+
+    typedef void*(__thiscall *GetFontInfoFn)(void*);
+    return reinterpret_cast<GetFontInfoFn>(GetFontInfoAddress)(
+        reinterpret_cast<void*>(textureWrapper));
+}
+
+bool markFontForCurrentRefresh(void* fontInfo) {
+    for (DWORD i = 0; i < g_scaledFontCount; ++i) {
+        if (g_scaledFonts[i] == fontInfo) {
+            return false;
+        }
+    }
+
+    if (g_scaledFontCount == MaxFontsPerRefresh) {
+        return false;
+    }
+    g_scaledFonts[g_scaledFontCount++] = fontInfo;
+    return true;
+}
+
+}
+
+void scaleLoadedTextureMetadata(void* texture) {
     const UniversalScaleState* scale = ResolutionScale::get();
     if (!scale) {
         return;
     }
 
-    for (int i = 0; i < g_trackedFontInfoCount; ++i) {
-        scaleFontInfo(g_trackedFontInfos[i].object, *scale);
+    const float currentScale = twoXScaleAdjustment(*scale);
+    if (g_appliedScale <= 0.0f) {
+        g_appliedScale = currentScale;
     }
+
+    void* fontInfo = fontInfoFromTexture(texture);
+    multiplyFontInfo(fontInfo, currentScale);
+
+    // UpdateAllFonts can load a new font partway through a resolution refresh.
+    // Its metadata is now at the new absolute scale, so later GUI strings that
+    // share it must not also apply the old-to-new adjustment.
+    if (g_refreshInProgress && fontInfo) {
+        markFontForCurrentRefresh(fontInfo);
+    }
+}
+
+void scaleResetGuiStringFont(void* guiString) {
+    if (!g_refreshInProgress) {
+        return;
+    }
+
+    void* fontInfo = fontInfoFromGuiString(guiString);
+    if (fontInfo && markFontForCurrentRefresh(fontInfo)) {
+        multiplyFontInfo(fontInfo, g_refreshAdjustment);
+    }
+}
+
+void refreshResolutionDependentUi() {
+    const UniversalScaleState* scale = ResolutionScale::get();
+    if (!scale || g_appliedScale <= 0.0f) {
+        return;
+    }
+
+    const float newScale = twoXScaleAdjustment(*scale);
+    const float adjustment = newScale / g_appliedScale;
+    if (adjustment == 1.0f) {
+        return;
+    }
+
+    DWORD guiManager = 0;
+    if (!safeReadDword(reinterpret_cast<const void*>(GuiManagerPointerAddress), guiManager) ||
+        guiManager == 0) {
+        return;
+    }
+
+    g_scaledFontCount = 0;
+    g_refreshAdjustment = adjustment;
+    g_refreshInProgress = true;
+
+    typedef void(__thiscall *UpdateAllFontsFn)(void*);
+    __try {
+        reinterpret_cast<UpdateAllFontsFn>(UpdateAllFontsAddress)(
+            reinterpret_cast<void*>(guiManager));
+    }
+    __finally {
+        g_refreshInProgress = false;
+    }
+    g_appliedScale = newScale;
 }
 
 }

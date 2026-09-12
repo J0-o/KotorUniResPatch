@@ -61,15 +61,6 @@ constexpr DWORD ActionMenuControlOffsets[] = {
     0x00, 0x1C4, 0x388, 0x54C
 };
 
-struct CachedRect {
-    char* control;
-    Rect rect;
-    bool valid;
-};
-
-constexpr int MaxCachedRects = 256;
-CachedRect g_cachedRects[MaxCachedRects] = {};
-
 constexpr DWORD CharacterControlOffsets[] = {
     0x28, 0x168, 0x2A8, 0x3E8, 0x528,
     0x668, 0x7A8, 0x8F8, 0xA48, 0xB88, 0xCC8
@@ -169,32 +160,9 @@ bool getBaseRectForControl(char* control, Rect& rect) {
         return false;
     }
 
-    for (CachedRect& cached : g_cachedRects) {
-        if (cached.valid && cached.control == control) {
-            rect = cached.rect;
-            return true;
-        }
-    }
-
-    Rect current = {};
-    if (!safeReadRect(control + 0x04, current) ||
-        !hasUsefulRect(current) ||
-        !isBaseRect(current)) {
-        return false;
-    }
-
-    for (CachedRect& cached : g_cachedRects) {
-        if (!cached.valid) {
-            cached.control = control;
-            cached.rect = current;
-            cached.valid = true;
-            rect = current;
-            return true;
-        }
-    }
-
-    rect = current;
-    return true;
+    return safeReadRect(control + 0x04, rect) &&
+        hasUsefulRect(rect) &&
+        isBaseRect(rect);
 }
 
 bool isMinimapControl(DWORD offset) {

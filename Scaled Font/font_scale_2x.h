@@ -4,8 +4,8 @@
 
 namespace FontScale2x {
 
-void scaleFontBeforeTextOut(void* font);
-void scaleGuiStringBeforeDraw(void* guiString);
+void scaleLoadedTextureMetadata(void* textureMetadata);
+void scaleResetGuiStringFont(void* guiString);
 void refreshResolutionDependentUi();
 
 }

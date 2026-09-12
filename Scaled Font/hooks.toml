@@ -1,39 +1,25 @@
-# Scale CAurFontInfo before CAurFont::TextOutA builds glyph quads.
-#
-# Ghidra/address-db research:
-# - Address database identifies 0x004A1770 as CAurFont::TextOutA.
-# - TextOutA reads CAurFont + 0x18 as CAurFontInfo, then uses:
-#   - +0x04 fontheight and +0x08 baselineheight for glyph quad Y extents.
-#   - +0x0C texturewidth and +0x10 spacingR for glyph advance/width.
-#   - +0x14 spacingB for vertical spacing.
-# - Glyph upper/lower coordinate arrays are texture UVs and are intentionally
-#   left unchanged.
+# Scale CAurFontInfo once, after the texture TXI metadata parser has completed.
+# EDI is the live texture object and +0x38 is its CAurFontInfo pointer.
+# This replaces the per-frame TextOutA/GUIString hooks and their pointer cache.
 [[hooks]]
-address = 0x004A1770
+address = 0x00422CC1
 type = "detour"
-function = "scaleFontBeforeTextOut"
-original_bytes = [0x6A, 0xFF, 0x68, 0x5C, 0x7E, 0x71, 0x00, 0x64, 0xA1, 0x00, 0x00, 0x00, 0x00]
+function = "scaleLoadedTextureMetadata"
+original_bytes = [0x8B, 0x8C, 0x24, 0x14, 0x20, 0x00, 0x00]
 exclude_from_restore = []
 
 [[hooks.parameters]]
-source = "ecx"
+source = "edi"
 type = "pointer"
 
-# Scale GUI string font info before CAurGUIStringInternal::Draw renders labels,
-# buttons, listbox rows, and other CSWGuiText-backed controls.
-#
-# Ghidra/address-db research:
-# - Address database identifies 0x0045A850 as CAurGUIStringInternal::Draw.
-# - CAurGUIStringInternal::GetFontPixelHeight at 0x00459610 reads
-#   CAurGUIStringInternal + 0x18, calls the safe-pointer vtable method at
-#   +0x38, and treats the returned pointer as CAurFontInfo by reading +0x04.
-# - Hooking Draw covers the GUI text path that the CAurFont::TextOutA hook did
-#   not visibly affect.
+# CSWGuiManager::UpdateAllFonts reaches every live GUI string through this
+# shared ReSetFont implementation. During a resolution refresh, scale each
+# distinct font referenced by its live text-render object.
 [[hooks]]
-address = 0x0045A850
+address = 0x00415D60
 type = "detour"
-function = "scaleGuiStringBeforeDraw"
-original_bytes = [0x83, 0xEC, 0x4C, 0x89, 0x4C, 0x24, 0x04]
+function = "scaleResetGuiStringFont"
+original_bytes = [0x83, 0xEC, 0x38, 0x56, 0x8B, 0xF1]
 exclude_from_restore = []
 
 [[hooks.parameters]]

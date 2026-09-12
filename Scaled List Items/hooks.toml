@@ -39,7 +39,7 @@ exclude_from_restore = []
 source = "esp+24"
 type = "pointer"
 
-# Feat group constructor height and stored canonical group height.
+# Feat group constructor height.
 [[hooks]]
 address = 0x006CD8D5
 type = "detour"
@@ -51,6 +51,38 @@ exclude_from_restore = []
 [[hooks.parameters]]
 source = "esp+36"
 type = "pointer"
+
+# Feat/power group layout finishes by copying the incoming height into the
+# stored row extent. Replace only that final six-byte height copy with the
+# current Scaled Kotor value; all left, top, and width handling remains native.
+[[hooks]]
+address = 0x006CCFBC
+type = "detour"
+function = "setFeatStoredHeight"
+original_bytes = [0x8B, 0x4E, 0x0C, 0x89, 0x4F, 0x0C]
+skip_original_bytes = true
+exclude_from_restore = []
+
+[[hooks.parameters]]
+source = "edi"
+type = "pointer"
+
+# Variable-height list layout adds a row count to the row height, then stores
+# that inflated extent back into reusable rows. Remove the addition so repeated
+# Powers/Feats population cannot feed a larger height into the next pass.
+[[hooks]]
+address = 0x0041B507
+type = "simple"
+original_bytes = [0x03, 0xEA]
+replacement_bytes = [0x90, 0x90]
+
+# Do not add another pixel to the first remainder rows. That value is likewise
+# written back into the controls and otherwise re-enters the next layout pass.
+[[hooks]]
+address = 0x0041B52C
+type = "simple"
+original_bytes = [0x8D, 0x55, 0x01]
+replacement_bytes = [0x8D, 0x55, 0x00]
 
 # Generic composite rows copy the incoming height into the child-layout rect.
 # Replace only that six-byte copy; the following ECX stack load remains native.
@@ -68,24 +100,6 @@ type = "pointer"
 
 [[hooks.parameters]]
 source = "ecx"
-type = "pointer"
-
-# Feat group stored extent normalization. Copy the stable left/top values,
-# derive width from entry three, and store the active adjusted height.
-[[hooks]]
-address = 0x006CCFA9
-type = "detour"
-function = "setFeatStoredExtent"
-original_bytes = [0x8B, 0x0E, 0x83, 0xC7, 0x04, 0x89, 0x0F, 0x8B, 0x56, 0x04, 0x89, 0x57, 0x04, 0x8B, 0x46, 0x08, 0x89, 0x47, 0x08, 0x8B, 0x4E, 0x0C, 0x89, 0x4F, 0x0C]
-skip_original_bytes = true
-exclude_from_restore = []
-
-[[hooks.parameters]]
-source = "esi"
-type = "pointer"
-
-[[hooks.parameters]]
-source = "edi"
 type = "pointer"
 
 # Use the scaled icon border for feat/power hit testing.

@@ -3,6 +3,6 @@ EXPORTS
     setInventoryItemRowHeight
     setSkillItemRowHeight
     setFeatGroupRowHeight
-    setFeatStoredExtent
+    setFeatStoredHeight
     setGenericListRowHeight
     refreshResolutionDependentUi
